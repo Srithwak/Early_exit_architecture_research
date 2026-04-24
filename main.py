@@ -1,188 +1,263 @@
+"""
+main.py — Consolidated Early Exit Architecture Research Pipeline.
+
+All model configurations are tested under identical conditions
+(same seeds, same total epochs, same evaluation protocol) to
+ensure unbiased comparison.
+"""
+
 import os
+import json
 import torch
 import pandas as pd
 import numpy as np
-import matplotlib.pyplot as plt
 import torch.optim as optim
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+from typing import List
 
 from dataset import get_dataloaders
-from models import GenericEarlyExitNet, AdaptiveEarlyExitNet, EnergyJointLoss, AdaptiveEnergyJointLoss
-from train import train_classifiers_only, train_joint, calibrate_thresholds
-from evaluate import inspect_data, evaluate_model, evaluate_model_advanced
+from models import (GenericEarlyExitNet, AdaptiveEarlyExitNet,
+                    EnergyJointLoss, AdaptiveEnergyJointLoss,
+                    apply_structured_pruning, compute_channel_importance)
+from train import set_seed, train_classifiers_only, train_joint, calibrate_thresholds
+from evaluate import inspect_data, evaluate_model_advanced
+from analysis import (collect_exit_statistics, analyze_exit_patterns,
+                      compute_difficulty_scores, print_analysis_report)
+from visualize import generate_all_plots
 
-def run_pipeline():
-    base_dir = "."
-    plots_dir = os.path.join(base_dir, "plots")
-    os.makedirs(plots_dir, exist_ok=True)
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-    data_dir = os.path.join(base_dir, "data", "bonn")
-    train_dl, val_dl, test_dl, class_weights = get_dataloaders(data_dir, batch_size=64)
-    class_weights = class_weights.to(device)
-
-    # Display preprocessed data attributes
-    inspect_data(train_dl)
-
-    models_to_test = {
-        "1. Base CNN (Control)": {"channels": [64, 64, 64], "is_baseline": True, "adaptive": False},
-        "2. Constant Width": {"channels": [64, 64, 64], "is_baseline": False, "adaptive": False},
-        "3. Increasing Width": {"channels": [32, 64, 128], "is_baseline": False, "adaptive": False},
-        "4. Decreasing Width": {"channels": [128, 64, 32], "is_baseline": False, "adaptive": False},
-        "5. Adaptive Width": {"channels": [64, 64, 64], "is_baseline": False, "adaptive": True}
-    }
-
-    results = []
-    exit_dists = {}
-    class_exit_dists = {}
-
-    for name, config in models_to_test.items():
-        print(f"\n{'='*50}\nTraining {name}\n{'='*50}")
-        if config.get("adaptive"):
-            model = AdaptiveEarlyExitNet(in_channels=6, channel_sizes=config["channels"], seq_len=4097).to(device)
-        else:
-            model = GenericEarlyExitNet(in_channels=6, channel_sizes=config["channels"], seq_len=4097).to(device)
-
-        total_mflops = sum(model.stage_flops) / 1e6
-        print(f"Total FLOPs: {total_mflops:.2f}M | Stage Breakdown: {[f'{f/1e6:.2f}M' for f in model.stage_flops]}")
-
-        def criterion_fn(energy_lambda):
-            if config.get("adaptive"):
-                return AdaptiveEnergyJointLoss(model.stage_flops, class_weights, energy_lambda=energy_lambda, sparsity_lambda=0.01, is_baseline=config["is_baseline"])
-            return EnergyJointLoss(model.stage_flops, class_weights, energy_lambda=energy_lambda, is_baseline=config["is_baseline"])
-
-        optimizer = optim.Adam(model.parameters(), lr=0.001, weight_decay=1e-4)
-
-        if config["is_baseline"]:
-            train_classifiers_only(model, train_dl, epochs=40, optimizer=optimizer, criterion_fn=criterion_fn, device=device)
-            thresholds = [1.0] * (model.num_stages - 1)
-        else:
-            train_classifiers_only(model, train_dl, epochs=25, optimizer=optimizer, criterion_fn=criterion_fn, device=device)
-            train_joint(model, train_dl, epochs=15, optimizer=optimizer, criterion_fn=criterion_fn, device=device, energy_lambda=0.02)
-            thresholds = calibrate_thresholds(model, val_dl, device=device, target_acc=0.99)
-
-        acc, recall, f1, energy_red, stage_exits, class_exits = evaluate_model(model, test_dl, thresholds, device, is_baseline=config["is_baseline"])
-
-        results.append({
-            "Model": name,
-            "Accuracy (%)": acc * 100,
-            "Recall (%)": recall * 100,
-            "F1 Score (%)": f1 * 100,
-            "Energy Reduction (%)": energy_red * 100
-        })
-        exit_dists[name] = stage_exits
-        class_exit_dists[name] = class_exits
-
-        print(f"Result -> Acc: {acc*100:.2f}%, Recall: {recall*100:.2f}%, F1: {f1*100:.2f}%, Energy Reduction: {energy_red*100:.2f}%")
-        print(f"  Total Exits: {stage_exits}")
-
-    df = pd.DataFrame(results)
-    print("\nResults DataFrame:")
-    print(df.to_string())
-
-    # Plotting Exit Distributions
-    fig, axes = plt.subplots(2, 3, figsize=(15, 10))
-    axes = axes.flatten()
-    stages = [f"Stage {i+1}" for i in range(3)]
-
-    for i, (name, exits) in enumerate(exit_dists.items()):
-        axes[i].bar(stages, exits, color=['skyblue', 'orange', 'green'])
-        axes[i].set_title(f"{name}\nAcc: {results[i]['Accuracy (%)']:.1f}% | Energy Red: {results[i]['Energy Reduction (%)']:.1f}%")
-        axes[i].set_ylabel("Samples")
-
-    if len(exit_dists) < len(axes):
-        for j in range(len(exit_dists), len(axes)):
-            fig.delaxes(axes[j])
-
-    plt.tight_layout()
-    plt.savefig(os.path.join(plots_dir, "model_comparisons_exits.png"))
-    # plt.show() # Commented out to avoid blocking execution
-
-    # Plotting Accuracy vs Energy Reduction Trade-off
-    plt.figure(figsize=(8,6))
-    for idx, row in df.iterrows():
-        plt.scatter(row["Energy Reduction (%)"], row["Accuracy (%)"], s=150, label=row["Model"])
-        plt.text(row["Energy Reduction (%)"]+0.5, row["Accuracy (%)"], row["Model"].split(".")[1], fontsize=9)
-
-    plt.title("Accuracy vs Energy Reduction Trade-off")
-    plt.xlabel("Theoretical MFLOPs Reduction (%)")
-    plt.ylabel("Test Accuracy (%)")
-    plt.grid(True, linestyle="--", alpha=0.6)
-    plt.legend()
-    plt.savefig(os.path.join(plots_dir, "energy_vs_acc.png"))
-    # plt.show() # Commented out to avoid blocking execution
-
+# ──────────────────────────────────────────────
+# Configuration
+# ──────────────────────────────────────────────
 
 @dataclass
 class ExperimentConfig:
     """Centralized configuration for the research experiments."""
     data_dir: str = "./data/bonn"
+    plots_dir: str = "./plots"
+    results_dir: str = "./results"
     batch_size: int = 64
     seq_len: int = 4097
-    use_freq_bands: bool = True  # Enable our new FFT features
+    use_freq_bands: bool = True
     in_channels: int = 6         # 1 Raw Time-Series + 5 Frequency Bands
-    num_trials: int = 2
-    warmup_epochs: int = 8
-    joint_epochs: int = 4
-    target_acc: float = 0.98
+    num_classes: int = 2
+    num_trials: int = 3          # Multiple trials for statistical validity
+    base_seed: int = 42
+    # Training — same total epochs for ALL models (unbiased)
+    warmup_epochs: int = 10
+    joint_epochs: int = 10
+    # Hyperparameters
     learning_rate: float = 0.001
     weight_decay: float = 1e-4
+    energy_lambda: float = 0.02
+    sparsity_lambda: float = 0.01
+    max_grad_norm: float = 1.0
+    # Threshold strategy
+    threshold_strategy: str = "confidence"  # "confidence", "entropy", "patience"
+    target_acc: float = 0.95     # For confidence strategy
+    entropy_percentile: float = 80  # For entropy strategy
+    patience: int = 2            # For patience strategy
+
+
+# ──────────────────────────────────────────────
+# Model Registry (Unbiased — all tested equally)
+# ──────────────────────────────────────────────
+
+def get_architecture_configs():
+    """
+    All model architectures to test. Every non-baseline model
+    uses identical training protocol (same warmup + joint epochs).
+    The baseline skips joint training but still trains for the same
+    total number of epochs in warmup to ensure equal optimization budget.
+    """
+    return {
+        "Base CNN (Control)": {
+            "channels": [64, 64, 64],
+            "is_baseline": True,
+            "adaptive": False,
+            "description": "Standard CNN without early exits (control group)"
+        },
+        "Constant Width": {
+            "channels": [64, 64, 64],
+            "is_baseline": False,
+            "adaptive": False,
+            "description": "Equal channel count across stages"
+        },
+        "Increasing Width": {
+            "channels": [32, 64, 128],
+            "is_baseline": False,
+            "adaptive": False,
+            "description": "Channels increase with depth"
+        },
+        "Decreasing Width": {
+            "channels": [128, 64, 32],
+            "is_baseline": False,
+            "adaptive": False,
+            "description": "Channels decrease with depth"
+        },
+        "Adaptive Width": {
+            "channels": [64, 64, 64],
+            "is_baseline": False,
+            "adaptive": True,
+            "description": "Learned channel gating (soft pruning)"
+        },
+    }
+
+
+def get_model_size_configs():
+    """Model size variants for scaling experiments."""
+    return {
+        "Tiny [16]": {"channels": [16, 16, 16]},
+        "Small [32]": {"channels": [32, 32, 32]},
+        "Medium [64]": {"channels": [64, 64, 64]},
+        "Large [128]": {"channels": [128, 128, 128]},
+        "XLarge [256]": {"channels": [256, 256, 256]},
+    }
+
+
+# ──────────────────────────────────────────────
+# Research Pipeline
+# ──────────────────────────────────────────────
 
 class ResearchPipeline:
     """Modular pipeline for managing and aggregating Early-Exit experiments."""
+
     def __init__(self, config: ExperimentConfig):
         self.config = config
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        print(f"[Pipeline] Device: {self.device}")
+
+        os.makedirs(config.plots_dir, exist_ok=True)
+        os.makedirs(config.results_dir, exist_ok=True)
+
         self.train_dl, self.val_dl, self.test_dl, self.class_weights = get_dataloaders(
-            self.config.data_dir, self.config.batch_size, use_freq_bands=self.config.use_freq_bands
+            config.data_dir, config.batch_size, use_freq_bands=config.use_freq_bands
         )
         self.class_weights = self.class_weights.to(self.device)
         self.results = []
-
-        # Dictionary defining the architectures to test
-        self.models_to_test = {
-            "1. Constant Width": {"channels": [64, 64, 64], "is_baseline": False, "adaptive": False},
-            "2. Adaptive Width": {"channels": [64, 64, 64], "is_baseline": False, "adaptive": True}
-        }
+        self.viz_data = {"per_model": {}, "exit_distributions": {}}
 
     def _build_model(self, config_dict):
         """Factory method to construct the appropriate network."""
         if config_dict.get("adaptive"):
-            return AdaptiveEarlyExitNet(in_channels=self.config.in_channels, channel_sizes=config_dict["channels"], seq_len=self.config.seq_len).to(self.device)
-        return GenericEarlyExitNet(in_channels=self.config.in_channels, channel_sizes=config_dict["channels"], seq_len=self.config.seq_len).to(self.device)
+            return AdaptiveEarlyExitNet(
+                in_channels=self.config.in_channels,
+                channel_sizes=config_dict["channels"],
+                num_classes=self.config.num_classes,
+                seq_len=self.config.seq_len
+            ).to(self.device)
+        return GenericEarlyExitNet(
+            in_channels=self.config.in_channels,
+            channel_sizes=config_dict["channels"],
+            num_classes=self.config.num_classes,
+            seq_len=self.config.seq_len
+        ).to(self.device)
 
-    def _get_criterion(self, model, config_dict, e_lambda):
-        """Factory method to construct the objective function."""
-        if config_dict.get("adaptive"):
-            return AdaptiveEnergyJointLoss(model.stage_flops, self.class_weights, energy_lambda=e_lambda, sparsity_lambda=0.01, is_baseline=config_dict["is_baseline"])
-        return EnergyJointLoss(model.stage_flops, self.class_weights, energy_lambda=e_lambda, is_baseline=config_dict["is_baseline"])
+    def _get_criterion_fn(self, model, config_dict):
+        """Returns a closure that builds the loss for a given energy_lambda."""
+        def criterion_fn(energy_lambda):
+            if config_dict.get("adaptive"):
+                return AdaptiveEnergyJointLoss(
+                    model.stage_flops, self.class_weights,
+                    energy_lambda=energy_lambda,
+                    sparsity_lambda=self.config.sparsity_lambda,
+                    is_baseline=config_dict["is_baseline"]
+                )
+            return EnergyJointLoss(
+                model.stage_flops, self.class_weights,
+                energy_lambda=energy_lambda,
+                is_baseline=config_dict["is_baseline"]
+            )
+        return criterion_fn
 
-    def run_ablation(self, energy_lambdas):
-        """Runs the entire matrix of experiments across trials and parameters."""
+    def _train_model(self, model, config_dict, seed):
+        """
+        Train a model using the two-phase protocol.
+        
+        UNBIASED: All models (including baseline) get the same total
+        number of epochs. Baselines train warmup_epochs + joint_epochs
+        all in warmup mode. Non-baselines split into warmup then joint.
+        """
+        set_seed(seed)
+        criterion_fn = self._get_criterion_fn(model, config_dict)
+        optimizer = optim.Adam(
+            model.parameters(),
+            lr=self.config.learning_rate,
+            weight_decay=self.config.weight_decay
+        )
+        scheduler = optim.lr_scheduler.ReduceLROnPlateau(
+            optimizer, mode='min', factor=0.5, patience=3
+        )
+
+        total_epochs = self.config.warmup_epochs + self.config.joint_epochs
+
+        if config_dict["is_baseline"]:
+            # Baseline: all epochs in warmup (no exit policy training)
+            train_classifiers_only(
+                model, self.train_dl, total_epochs,
+                optimizer, criterion_fn, self.device,
+                scheduler=scheduler, max_grad_norm=self.config.max_grad_norm
+            )
+            threshold_info = {"strategy": "confidence",
+                              "thresholds": [1.0] * (model.num_stages - 1)}
+        else:
+            # Non-baseline: warmup then joint
+            train_classifiers_only(
+                model, self.train_dl, self.config.warmup_epochs,
+                optimizer, criterion_fn, self.device,
+                scheduler=scheduler, max_grad_norm=self.config.max_grad_norm
+            )
+            train_joint(
+                model, self.train_dl, self.config.joint_epochs,
+                optimizer, criterion_fn, self.device,
+                energy_lambda=self.config.energy_lambda,
+                scheduler=scheduler, max_grad_norm=self.config.max_grad_norm
+            )
+            threshold_info = calibrate_thresholds(
+                model, self.val_dl, self.device,
+                strategy=self.config.threshold_strategy,
+                target_acc=self.config.target_acc,
+                entropy_percentile=self.config.entropy_percentile,
+                patience=self.config.patience
+            )
+
+        return threshold_info
+
+    def run_architecture_ablation(self, energy_lambdas=None):
+        """Run experiments across all architectures with multi-trial averaging."""
+        arch_configs = get_architecture_configs()
+        if energy_lambdas is None:
+            energy_lambdas = [self.config.energy_lambda]
+
         for e_lambda in energy_lambdas:
-            print(f"\n{'='*60}\nRunning Ablation: Energy Lambda = {e_lambda}\n{'='*60}")
+            print(f"\n{'='*60}")
+            print(f"Energy Lambda = {e_lambda}")
+            print(f"{'='*60}")
 
-            for name, m_config in self.models_to_test.items():
-                print(f"\nEvaluating {name} over {self.config.num_trials} trials...")
-                trial_metrics = {k: [] for k in ['acc', 'recall', 'f1', 'ece', 'energy_red', 'latency']}
+            for name, m_config in arch_configs.items():
+                print(f"\n--- {name} ({self.config.num_trials} trials) ---")
+                trial_metrics = {k: [] for k in
+                    ['acc', 'recall', 'f1', 'ece', 'energy_red', 'latency']}
+                last_exit_df = None
+                last_analysis = None
+                last_ece_bin_data = None
 
                 for trial in range(self.config.num_trials):
-                    print(f"  -> Trial {trial+1}/{self.config.num_trials}")
+                    trial_seed = self.config.base_seed + trial
+                    print(f"  Trial {trial+1}/{self.config.num_trials} (seed={trial_seed})")
+
+                    self.config.energy_lambda = e_lambda
                     model = self._build_model(m_config)
-                    optimizer = optim.Adam(model.parameters(), lr=self.config.learning_rate, weight_decay=self.config.weight_decay)
+                    total_params = model.count_parameters()
+                    total_flops = sum(model.stage_flops) / 1e6
 
-                    # Closure for loss function
-                    def criterion_fn(energy_lambda):
-                        return self._get_criterion(model, m_config, energy_lambda)
+                    threshold_info = self._train_model(model, m_config, trial_seed)
 
-                    # Pipeline Execution
-                    train_classifiers_only(model, self.train_dl, self.config.warmup_epochs, optimizer, criterion_fn, self.device)
-                    train_joint(model, self.train_dl, self.config.joint_epochs, optimizer, criterion_fn, self.device, energy_lambda=e_lambda)
-                    thresholds = calibrate_thresholds(model, self.val_dl, self.device, self.config.target_acc)
+                    # Evaluate
+                    acc, recall, f1, ece, energy_red, latency, per_sample, ece_bins = \
+                        evaluate_model_advanced(model, self.test_dl, threshold_info,
+                                                self.device, is_baseline=m_config["is_baseline"])
 
-                    acc, recall, f1, ece, energy_red, latency = evaluate_model_advanced(model, self.test_dl, thresholds, self.device, is_baseline=m_config["is_baseline"])
-
-                    # Record metrics
                     trial_metrics['acc'].append(acc * 100)
                     trial_metrics['recall'].append(recall * 100)
                     trial_metrics['f1'].append(f1 * 100)
@@ -190,37 +265,291 @@ class ResearchPipeline:
                     trial_metrics['energy_red'].append(energy_red * 100)
                     trial_metrics['latency'].append(latency)
 
-                # Aggregate and format
-                self.results.append({
+                    # Deep analysis on last trial
+                    if trial == self.config.num_trials - 1:
+                        exit_df = collect_exit_statistics(
+                            model, self.test_dl, threshold_info,
+                            self.device, is_baseline=m_config["is_baseline"])
+                        last_analysis = analyze_exit_patterns(exit_df, model.num_stages)
+                        last_exit_df = exit_df
+                        last_ece_bin_data = ece_bins
+                        print_analysis_report(last_analysis, name)
+
+                    print(f"    Acc: {acc*100:.2f}%, F1: {f1*100:.2f}%, "
+                          f"ER: {energy_red*100:.2f}%")
+
+                # Aggregate
+                result = {
                     "Model": name,
                     "Lambda": e_lambda,
+                    "Params": total_params,
+                    "MFLOPs": f"{total_flops:.2f}",
                     "Accuracy (%)": f"{np.mean(trial_metrics['acc']):.2f} ± {np.std(trial_metrics['acc']):.2f}",
                     "Recall (%)": f"{np.mean(trial_metrics['recall']):.2f} ± {np.std(trial_metrics['recall']):.2f}",
                     "F1 Score (%)": f"{np.mean(trial_metrics['f1']):.2f} ± {np.std(trial_metrics['f1']):.2f}",
                     "ECE": f"{np.mean(trial_metrics['ece']):.4f} ± {np.std(trial_metrics['ece']):.4f}",
                     "Energy Red (%)": f"{np.mean(trial_metrics['energy_red']):.2f} ± {np.std(trial_metrics['energy_red']):.2f}",
-                    "Latency (ms)": f"{np.mean(trial_metrics['latency']):.2f} ± {np.std(trial_metrics['latency']):.2f}"
-                })
+                    "Latency (ms)": f"{np.mean(trial_metrics['latency']):.2f} ± {np.std(trial_metrics['latency']):.2f}",
+                }
+                self.results.append(result)
 
-        return pd.DataFrame(self.results)
+                # Store viz data
+                stage_exits = [0] * model.num_stages
+                if last_exit_df is not None:
+                    for s in range(model.num_stages):
+                        stage_exits[s] = int((last_exit_df["exit_stage"] == s).sum())
+                self.viz_data["exit_distributions"][name] = stage_exits
+                self.viz_data["per_model"][name] = {
+                    "ece_bin_data": last_ece_bin_data,
+                    "ece": np.mean(trial_metrics['ece']),
+                    "analysis": last_analysis,
+                    "exit_df": last_exit_df,
+                }
 
+        df = pd.DataFrame(self.results)
+        self.viz_data["results_df"] = df
+        self.viz_data["results_list"] = self.results
+        return df
+
+    def run_model_size_experiment(self):
+        """Experiment with different model sizes."""
+        size_configs = get_model_size_configs()
+        size_results = []
+
+        print(f"\n{'='*60}")
+        print("Model Size Scaling Experiment")
+        print(f"{'='*60}")
+
+        for name, s_config in size_configs.items():
+            m_config = {"channels": s_config["channels"], "is_baseline": False, "adaptive": False}
+            model = self._build_model(m_config)
+            params = model.count_parameters()
+            flops = sum(model.stage_flops) / 1e6
+            print(f"\n--- {name}: {params:,} params, {flops:.2f} MFLOPs ---")
+
+            set_seed(self.config.base_seed)
+            threshold_info = self._train_model(model, m_config, self.config.base_seed)
+
+            acc, recall, f1, ece, energy_red, latency, _, _ = \
+                evaluate_model_advanced(model, self.test_dl, threshold_info,
+                                        self.device, is_baseline=False)
+
+            size_results.append({
+                "name": name, "channels": s_config["channels"],
+                "params": params, "mflops": flops,
+                "accuracy": acc * 100, "f1": f1 * 100,
+                "energy_reduction": energy_red * 100,
+            })
+            print(f"    Acc: {acc*100:.2f}%, F1: {f1*100:.2f}%, ER: {energy_red*100:.2f}%")
+
+        self.viz_data["size_results"] = size_results
+        return pd.DataFrame(size_results)
+
+    def run_pruning_experiment(self, prune_ratios=None):
+        """Experiment with structured pruning at different ratios."""
+        if prune_ratios is None:
+            prune_ratios = [0.0, 0.1, 0.25, 0.5]
+
+        pruning_results = []
+        print(f"\n{'='*60}")
+        print("Structured Pruning Experiment")
+        print(f"{'='*60}")
+
+        m_config = {"channels": [64, 64, 64], "is_baseline": False, "adaptive": False}
+
+        # Train base model first
+        set_seed(self.config.base_seed)
+        base_model = self._build_model(m_config)
+        self._train_model(base_model, m_config, self.config.base_seed)
+        base_flops = sum(base_model.stage_flops)
+
+        for ratio in prune_ratios:
+            print(f"\n--- Prune Ratio: {ratio:.0%} ---")
+            if ratio == 0.0:
+                model = base_model
+                pruned_flops = base_flops
+            else:
+                model, pruned_ch = apply_structured_pruning(
+                    base_model, prune_ratio=ratio,
+                    in_channels=self.config.in_channels,
+                    seq_len=self.config.seq_len,
+                    num_classes=self.config.num_classes
+                )
+                model = model.to(self.device)
+                pruned_flops = sum(model.stage_flops)
+
+                # Fine-tune the pruned model
+                criterion_fn = self._get_criterion_fn(model, m_config)
+                optimizer = optim.Adam(model.parameters(), lr=self.config.learning_rate * 0.1)
+                train_joint(model, self.train_dl, 5, optimizer, criterion_fn,
+                            self.device, energy_lambda=self.config.energy_lambda)
+
+            threshold_info = calibrate_thresholds(
+                model, self.val_dl, self.device,
+                strategy=self.config.threshold_strategy
+            )
+            acc, recall, f1, ece, energy_red, latency, _, _ = \
+                evaluate_model_advanced(model, self.test_dl, threshold_info,
+                                        self.device, is_baseline=False)
+
+            flops_red = (1.0 - pruned_flops / base_flops) * 100
+            pruning_results.append({
+                "prune_ratio": ratio,
+                "params": model.count_parameters(),
+                "accuracy": acc * 100, "f1": f1 * 100,
+                "flops_reduction": flops_red,
+                "energy_reduction": energy_red * 100,
+            })
+            print(f"    Acc: {acc*100:.2f}%, FLOPs Red: {flops_red:.1f}%")
+
+        self.viz_data["pruning_results"] = pruning_results
+        return pd.DataFrame(pruning_results)
+
+    def run_threshold_strategy_comparison(self):
+        """Compare different threshold strategies on the same model."""
+        strategies = ["confidence", "entropy", "patience"]
+        strategy_results = {}
+
+        print(f"\n{'='*60}")
+        print("Threshold Strategy Comparison")
+        print(f"{'='*60}")
+
+        m_config = {"channels": [64, 64, 64], "is_baseline": False, "adaptive": False}
+        set_seed(self.config.base_seed)
+        model = self._build_model(m_config)
+        self._train_model(model, m_config, self.config.base_seed)
+
+        for strategy in strategies:
+            print(f"\n--- Strategy: {strategy} ---")
+            threshold_info = calibrate_thresholds(
+                model, self.val_dl, self.device, strategy=strategy,
+                target_acc=self.config.target_acc,
+                entropy_percentile=self.config.entropy_percentile,
+                patience=self.config.patience
+            )
+            acc, recall, f1, ece, energy_red, latency, _, _ = \
+                evaluate_model_advanced(model, self.test_dl, threshold_info,
+                                        self.device, is_baseline=False)
+
+            strategy_results[strategy] = {
+                "accuracy": acc * 100, "f1": f1 * 100,
+                "energy_reduction": energy_red * 100,
+                "ece": ece, "latency_ms": latency,
+            }
+            print(f"    Acc: {acc*100:.2f}%, F1: {f1*100:.2f}%, ER: {energy_red*100:.2f}%")
+
+        self.viz_data["strategy_results"] = strategy_results
+        return strategy_results
+
+    def generate_visualizations(self):
+        """Generate all plots from collected data."""
+        generate_all_plots(self.viz_data, self.config.plots_dir)
+
+    def save_results(self):
+        """Save all raw results to disk for reproducibility."""
+        if self.results:
+            df = pd.DataFrame(self.results)
+            csv_path = os.path.join(self.config.results_dir, "main_results.csv")
+            df.to_csv(csv_path, index=False)
+            print(f"Results saved to {csv_path}")
+
+
+# ──────────────────────────────────────────────
+# CLI Entry Point
+# ──────────────────────────────────────────────
 
 if __name__ == "__main__":
     import argparse
-    parser = argparse.ArgumentParser(description="Run Early Exit Experiments")
-    parser.add_argument("--run-pipeline", action="store_true", help="Run the primary model comparisons pipeline")
-    parser.add_argument("--run-ablation", action="store_true", help="Run the advanced ablation research pipeline")
-    
+    parser = argparse.ArgumentParser(description="Early Exit Architecture Research")
+    parser.add_argument("--run-ablation", action="store_true",
+                        help="Run architecture ablation study")
+    parser.add_argument("--run-sizes", action="store_true",
+                        help="Run model size scaling experiment")
+    parser.add_argument("--run-pruning", action="store_true",
+                        help="Run structured pruning experiment")
+    parser.add_argument("--run-strategies", action="store_true",
+                        help="Compare threshold strategies")
+    parser.add_argument("--run-tuning", action="store_true",
+                        help="Run hyperparameter search")
+    parser.add_argument("--run-all", action="store_true",
+                        help="Run all experiments")
+    parser.add_argument("--seed", type=int, default=42,
+                        help="Base random seed")
+    parser.add_argument("--trials", type=int, default=3,
+                        help="Number of trials per configuration")
+    parser.add_argument("--strategy", type=str, default="confidence",
+                        choices=["confidence", "entropy", "patience"],
+                        help="Threshold calibration strategy")
     args = parser.parse_args()
-    
-    if args.run_pipeline or not args.run_ablation:
-        print("Running Primary Pipeline...")
-        run_pipeline()
-        
-    if args.run_ablation:
-        print("\nRunning Ablation Research Pipeline...")
-        cfg = ExperimentConfig(num_trials=2, warmup_epochs=8, joint_epochs=4)
-        pipeline = ResearchPipeline(cfg)
-        df_results = pipeline.run_ablation(energy_lambdas=[0.01, 0.05])
-        print("\nResults DataFrame:")
-        print(df_results.to_string())
+
+    cfg = ExperimentConfig(
+        base_seed=args.seed,
+        num_trials=args.trials,
+        threshold_strategy=args.strategy,
+    )
+    pipeline = ResearchPipeline(cfg)
+    inspect_data(pipeline.train_dl)
+
+    run_any = args.run_ablation or args.run_sizes or args.run_pruning or \
+              args.run_strategies or args.run_tuning or args.run_all
+
+    if not run_any:
+        # Default: run architecture ablation
+        args.run_ablation = True
+
+    if args.run_all or args.run_ablation:
+        print("\n" + "="*60)
+        print("ARCHITECTURE ABLATION STUDY")
+        print("="*60)
+        df = pipeline.run_architecture_ablation()
+        print("\n" + df.to_string())
+
+    if args.run_all or args.run_strategies:
+        print("\n" + "="*60)
+        print("THRESHOLD STRATEGY COMPARISON")
+        print("="*60)
+        pipeline.run_threshold_strategy_comparison()
+
+    if args.run_all or args.run_sizes:
+        print("\n" + "="*60)
+        print("MODEL SIZE SCALING")
+        print("="*60)
+        df_sizes = pipeline.run_model_size_experiment()
+        print("\n" + df_sizes.to_string())
+
+    if args.run_all or args.run_pruning:
+        print("\n" + "="*60)
+        print("STRUCTURED PRUNING")
+        print("="*60)
+        df_pruning = pipeline.run_pruning_experiment()
+        print("\n" + df_pruning.to_string())
+
+    if args.run_all or args.run_tuning:
+        print("\n" + "="*60)
+        print("HYPERPARAMETER SEARCH")
+        print("="*60)
+        from tuning import HyperparameterSearchSpace, run_hyperparameter_search
+
+        m_config = {"channels": [64, 64, 64], "is_baseline": False, "adaptive": False}
+        search_space = HyperparameterSearchSpace(
+            learning_rates=[5e-4, 1e-3, 5e-3],
+            energy_lambdas=[0.01, 0.05, 0.1],
+            weight_decays=[1e-4, 1e-3],
+            warmup_epochs_list=[8, 12],
+            joint_epochs_list=[8, 12],
+        )
+        tuning_results = run_hyperparameter_search(
+            model_builder_fn=lambda: pipeline._build_model(m_config),
+            criterion_builder_fn=lambda model, el, sl: EnergyJointLoss(
+                model.stage_flops, pipeline.class_weights, energy_lambda=el),
+            train_dl=pipeline.train_dl, val_dl=pipeline.val_dl,
+            test_dl=pipeline.test_dl, search_space=search_space,
+            device=pipeline.device, max_combinations=30, seed=args.seed,
+            results_dir=cfg.results_dir,
+        )
+        pipeline.viz_data["tuning_results"] = tuning_results
+
+    # Generate all visualizations and save results
+    pipeline.generate_visualizations()
+    pipeline.save_results()
+    print("\n✓ All experiments complete.")
