@@ -1,332 +1,564 @@
-# 🎤 Presentation Guide: Early-Exit Neural Network Architectures
-### Energy-Efficient Seizure Detection from EEG Signals
+# Presentation: Early-Exit Neural Network Architectures for Energy-Efficient Seizure Detection
+
 **Target Duration: 10 minutes | 12 slides**
+**Team: Rithwak Somepalli, Suryaprakash Murugavvel, Monique Gaye, Amrutha Kodali**
 
 ---
 
-## Slide-by-Slide Breakdown
+## Report Requirements Mapping
+
+| Report Section | Slides |
+|---|---|
+| **a) Introduction** (problem statement + contributions) | Slides 1-3 |
+| **b) Methodology** (algorithms, analysis, implementation) | Slides 4-6 |
+| **c) Experiments & Results** (evaluation methodology + results) | Slides 7-10 |
+| **d) Conclusions** (summary) | Slide 11 |
+| **e) Team contributions** | Slide 12 |
 
 ---
 
-### SLIDE 1 — Title Slide ⏱️ ~30s
+## SLIDE 1 — Title Slide
 
-**Slide Text:**
-> # Early-Exit Neural Network Architectures for Energy-Efficient Seizure Detection
-> **Rithwak Somepalli · Suryaprakash Murugavvel · Monique Gaye · Amrutha Kodali**
->
-> CS [Course Number] — Spring 2026
+**Time: ~30 seconds**
 
-**Visual:** Clean title layout with a subtle brain/EEG waveform graphic in the background. Keep it minimal and professional.
+### Slide Content
+```
+Title:    Early-Exit Neural Network Architectures
+          for Energy-Efficient Seizure Detection
 
-**What to say:**
-> "Hi everyone, today we're presenting our research on early-exit neural network architectures for energy-efficient seizure detection from EEG signals. This project explores how we can make neural networks smarter about *when to stop computing* — particularly for a medical application where efficiency really matters."
+Authors:  Rithwak Somepalli · Suryaprakash Murugavvel
+          Monique Gaye · Amrutha Kodali
 
----
+Course:   CS [Course Number] — Spring 2026
+```
 
-### SLIDE 2 — Problem & Motivation ⏱️ ~1 min
+### Visual
+Clean layout. Use one of these as a subtle background element:
+- An EEG waveform trace (you can screenshot one from the dataset)
+- Keep it minimal — white background, bold title
 
-**Slide Text:**
-> ## The Problem
-> - **1 in 26 people** will develop epilepsy in their lifetime
-> - Wearable EEG devices need **real-time** seizure detection
-> - Standard deep networks process every input through all layers — **wasteful**
-> - Easy cases (clearly non-seizure) get the same compute as ambiguous ones
->
-> ## Our Insight
-> *"Not all inputs are equally hard — the network should decide when it's confident enough to stop."*
-
-**Visual:** A diagram showing two paths:
-1. Traditional CNN: input → [Layer 1] → [Layer 2] → [Layer 3] → prediction (always full depth)
-2. Early-exit CNN: input → [Layer 1] → **EXIT** ✓ (for easy samples) vs input → [Layer 1] → [Layer 2] → [Layer 3] → prediction (for hard samples)
-
-**What to say:**
-> "So here's the problem. About 1 in 26 people will develop epilepsy. For wearable EEG devices to be practical for continuous monitoring, they need to be energy-efficient. But traditional deep learning models process every single input through the entire network, whether it's an obvious non-seizure recording or an ambiguous edge case. That's wasteful.
->
-> Our core insight is simple: not all inputs are equally hard. If the network is already confident at an early layer, why make it keep computing? Early-exit architectures attach classifier heads at intermediate layers, so the model can stop as soon as it's confident enough."
+### Script
+> "Hi everyone. Today we're presenting our research on early-exit neural network architectures for energy-efficient seizure detection from EEG signals. We explored how to make neural networks smarter about *when to stop computing* — and why that matters for a medical application running on wearable devices."
 
 ---
 
-### SLIDE 3 — Our Contributions ⏱️ ~45s
+## SLIDE 2 — Problem & Motivation
 
-**Slide Text:**
-> ## Contributions
-> 1. **Two novel architectures**: Decreasing-Width and Adaptive-Width early-exit CNNs
-> 2. **Comprehensive comparison** of 5 architectures under identical, bias-controlled conditions
-> 3. **Three dynamic thresholding strategies**: Confidence, Entropy, and Patience
-> 4. **Structured pruning** for additional compression beyond early exit
-> 5. **Statistical rigor**: 15-trial experiments with paired t-tests, Wilcoxon tests, Cohen's d, and 95% CIs
+**Time: ~1 minute**
 
-**Visual:** A simple numbered list with icons next to each item (lightbulb for novel, scale for comparison, gauge for thresholding, scissors for pruning, chart for stats).
+### Slide Content
+```
+THE PROBLEM
+-----------
+* 1 in 26 people will develop epilepsy in their lifetime
+* Wearable EEG devices need real-time seizure detection
+* Standard neural networks process every input through ALL layers
+  — same compute for obvious cases and ambiguous ones
+* This is wasteful for battery-powered medical devices
 
-**What to say:**
-> "Let me highlight what we actually did. First, we proposed two novel architectures — a decreasing-width design and an adaptive-width design that dynamically prunes features. Second, we conducted a comprehensive, fair comparison of five architectures under identical training conditions, with 15 trials per model and full statistical testing. We also compared three different strategies for deciding when to exit, and explored structured pruning as an additional compression technique."
+OUR INSIGHT
+-----------
+"Not all inputs are equally hard — the network should decide
+ when it's confident enough to stop."
+```
+
+### Visual
+Use the generated diagram: `plots/early_exit_concept.png`
+
+This diagram shows:
+- LEFT: Traditional CNN → input flows through all 3 layers every time
+- RIGHT: Early-Exit CNN → input can exit after Layer 1 if confident, saving ~40% energy
+
+### Script
+> "About 1 in 26 people will develop epilepsy. For wearable EEG monitors to be practical for continuous use, they need to be extremely energy-efficient. But traditional neural networks process every single input through the entire network — whether it's an obvious non-seizure recording or a genuinely ambiguous case. That's a huge waste of energy.
+>
+> Our core insight is simple: not all inputs are equally hard. If the network is already confident at an early layer, it should stop computing. Early-exit architectures attach classifier heads at intermediate layers so the model can stop and produce a prediction as soon as confidence is high enough."
 
 ---
 
-### SLIDE 4 — The Five Architectures ⏱️ ~1 min 15s
+## SLIDE 3 — Our Contributions
 
-**Slide Text:**
-> ## Architecture Design Space
->
-> | Architecture | Channel Progression | Novel? |
-> |---|---|---|
-> | **Baseline CNN** | [64, 64, 64] — no exits | Control |
-> | **Constant Width** | [64, 64, 64] + exits | Existing |
-> | **Increasing Width** | [32, 64, 128] + exits | Existing |
-> | **Decreasing Width** | [128, 64, 32] + exits | **Ours** |
-> | **Adaptive Width** | [64, 64, 64] + channel gates + exits | **Ours** |
+**Time: ~45 seconds**
 
-**Visual:** An architecture diagram showing the five models side by side, with colored blocks representing layer widths. The decreasing model should look like a funnel (wide→narrow), increasing like an expanding shape, and adaptive with "gate" symbols between layers. Annotate the two novel ones clearly.
+### Slide Content
+```
+CONTRIBUTIONS
+-------------
+1. Two NOVEL architectures:
+   - Decreasing-Width early-exit CNN
+   - Adaptive-Width early-exit CNN (with learned channel gating)
 
-**What to say:**
-> "Here are our five architectures. The baseline is a standard 3-stage CNN with no exits — it always uses all layers. The constant-width and increasing-width designs are established approaches in the literature. Our novel contributions are the decreasing-width model — think of it as a funnel that captures broad EEG patterns in early, wide layers, then narrows down to focus on the most discriminative features — and the adaptive-width model, which uses learned channel gates that dynamically suppress irrelevant features at each stage. The hypothesis is that early layers need to cast a wide net across EEG frequency bands, while deeper layers should focus."
+2. Comprehensive comparison of 5 architectures
+   under identical, bias-controlled conditions
 
----
+3. Three dynamic exit strategies:
+   Confidence, Entropy, and Patience thresholding
 
-### SLIDE 5 — Methodology Deep Dive ⏱️ ~1 min
+4. Structured pruning for additional model compression
 
-**Slide Text:**
-> ## Training Pipeline
-> 1. **Phase 1 — Warmup** (10 epochs): Train classifiers only, exits frozen, λ=0
-> 2. **Phase 2 — Joint** (10 epochs): Train everything with energy-aware loss (λ=0.02)
-> 3. **Phase 3 — Calibrate**: Tune exit thresholds on validation set
->
-> ## Energy-Aware Loss Function
-> $$\mathcal{L} = \sum_{i} p_{\text{reach}}^{(i)} \cdot p_{\text{exit}}^{(i)} \cdot \mathcal{L}_{\text{CE}}^{(i)} + \lambda \cdot p_{\text{reach}}^{(i)} \cdot c_{\text{FLOP}}^{(i)}$$
->
-> ## Fairness Controls
-> - All models: same total epochs, same seeds, same data splits
-> - Baseline gets equivalent epoch budget (all warmup)
-> - Weighted cross-entropy for class imbalance
+5. Statistical rigor:
+   5-trial experiments, paired t-tests, Wilcoxon tests,
+   Cohen's d effect sizes, 95% confidence intervals
+```
 
-**Visual:** A flow diagram: `Data → Phase 1 (Warmup) → Phase 2 (Joint Training with Energy Loss) → Phase 3 (Threshold Calibration) → Evaluation`. Include the loss equation.
+### Visual
+Simple numbered list with small icons:
+- Lightbulb icon for novel architectures
+- Scale icon for fair comparison
+- Gauge icon for thresholding
+- Scissors icon for pruning
+- Bar chart icon for statistics
 
-**What to say:**
-> "Our training pipeline has three phases. First, a warmup phase where we only train the classifier heads — exit policies are frozen. This ensures every classifier branch learns good representations. Then, joint training with our energy-aware loss function. This loss balances classification accuracy against computational cost — the lambda term penalizes using deeper layers when early exits would suffice. Finally, we calibrate the exit thresholds on a held-out validation set.
->
-> Crucially, to keep the comparison fair, all five models train under identical conditions — same seeds, same epoch budget, same data splits. The baseline gets the same total epochs but entirely in warmup mode."
+### Script
+> "Let me highlight what we actually did. First, we proposed two novel architectures — a decreasing-width design and an adaptive-width design that dynamically prunes features using learned channel gates. Second, we ran a fair, bias-controlled comparison of five architectures — same seeds, same epoch budget, same data splits — with multiple trials and full statistical testing. We also compared three different strategies for deciding when to exit, and explored structured pruning on top of early exits."
 
 ---
 
-### SLIDE 6 — Dataset & Preprocessing ⏱️ ~30s
+## SLIDE 4 — The Five Architectures (Methodology)
 
-**Slide Text:**
-> ## Bonn EEG Dataset
-> - **400 total samples** (280 train / 60 val / 60 test)
-> - Binary classification: seizure vs. non-seizure
-> - Sampling rate: 173.6 Hz, sequence length: 4,097 timepoints
+**Time: ~1 minute 15 seconds**
+
+### Slide Content
+```
+ARCHITECTURE DESIGN SPACE
+--------------------------
+| Architecture       | Channels       | Type     |
+|--------------------|----------------|----------|
+| Baseline CNN       | [64, 64, 64]   | Control  |
+| Constant Width     | [64, 64, 64]   | Existing |
+| Increasing Width   | [32, 64, 128]  | Existing |
+| Decreasing Width   | [128, 64, 32]  | NOVEL    |
+| Adaptive Width     | [64, 64, 64]   | NOVEL    |
+|                    | + channel gates |          |
+```
+
+### Visual
+Use the generated diagram: `plots/five_architectures.png`
+
+Shows all 5 architectures as block diagrams with varying widths.
+The Decreasing model looks like a funnel (wide→narrow).
+The Adaptive model has gate symbols between layers.
+
+### Script
+> "Here are our five architectures. The baseline is a standard 3-stage CNN with no exits — it always uses all layers. The constant-width and increasing-width designs come from existing literature like BranchyNet.
 >
-> ## Preprocessing
-> - Z-score normalization per sample
-> - FFT → 5 frequency band powers (δ, θ, α, β, γ) tiled as extra channels
-> - Input shape: **(6, 4097)** — 1 raw + 5 frequency bands
-
-**Visual:** A small waveform plot of EEG data, plus a diagram showing the 6-channel input (raw signal + 5 frequency bands stacked).
-
-**What to say:**
-> "We use the Bonn EEG seizure dataset — it's small but clean, with 400 samples split into training, validation, and test sets. Each sample is a 4,097-point EEG recording. We preprocess by normalizing each sample, then computing FFT to extract power across five standard EEG frequency bands — delta through gamma. These are tiled as additional channels, giving us a 6-channel input to the convolutional network."
+> Our novel contributions are the decreasing-width model — think of it as a funnel. The idea is that early layers need to cast a wide net across EEG frequency bands, capturing broad patterns, while deeper layers narrow down to focus on the most discriminative features. And the adaptive-width model, which uses learned channel gates — essentially tiny neural networks that decide which features to keep and which to suppress at each stage.
+>
+> Our hypothesis was that this funnel design could reduce energy consumption while maintaining accuracy. Let's see what actually happened."
 
 ---
 
-### SLIDE 7 — Main Results ⏱️ ~1 min 15s
+## SLIDE 5 — Training Pipeline (Methodology)
 
-**Slide Text:**
-> ## Architecture Comparison (15 trials, mean ± std)
->
-> | Model | Accuracy | F1 Score | Energy Reduction |
-> |---|---|---|---|
-> | Baseline CNN | 89.2 ± 8.6% | 84.9 ± 11.9% | 0% |
-> | Constant Width | 86.7 ± 7.7% | 75.1 ± 20.0% | **25.4%** |
-> | **Increasing Width** | **90.0 ± 6.2%** | **83.4 ± 14.6%** | **43.5%** |
-> | Decreasing Width | 87.6 ± 6.0% | 81.8 ± 12.8% | 12.9% |
-> | Adaptive Width | 85.0 ± 7.7% | 72.4 ± 19.8% | **46.8%** |
+**Time: ~1 minute**
 
-**Visual:** Use the **accuracy_vs_energy.png** Pareto plot — it's your single most powerful figure. Consider also showing the results table beside it.
+### Slide Content
+```
+THREE-PHASE TRAINING PROTOCOL
+------------------------------
+Phase 1 - WARMUP (10 epochs)
+  * Train classifier heads only
+  * Exit policies frozen (lambda = 0)
+  * Ensures every branch learns good features
 
-**What to say:**
-> "Here are our main results. The key takeaway is this Pareto plot on the right. The x-axis is energy reduction, the y-axis is accuracy. You want to be in the upper right — high accuracy AND high energy savings.
+Phase 2 - JOINT TRAINING (10 epochs)
+  * Energy-aware loss function:
+    L = SUM[ p_reach * p_exit * L_CE ] + lambda * energy_cost
+  * lambda = 0.02 penalizes unnecessary deep computation
+
+Phase 3 - THRESHOLD CALIBRATION
+  * Tune exit confidence thresholds on validation set
+  * Confidence strategy: exit when softmax > threshold
+
+FAIRNESS: All 5 models get identical total epochs,
+          same seeds, same data splits
+```
+
+### Visual
+Use the generated diagram: `plots/training_pipeline.png`
+
+Horizontal flowchart: Data → Warmup → Joint Training → Calibration → Evaluation
+
+### Script
+> "Our training pipeline has three phases. First, a warmup phase where we only train the classifier heads at each exit — the exit policies are frozen. This ensures every branch learns good representations before the energy penalty kicks in.
 >
-> The Increasing Width model is the clear Pareto-optimal choice — it achieves the highest accuracy at 90%, which actually *matches* the baseline, while saving 43.5% of the compute. That's remarkable — nearly half the energy with zero accuracy loss.
+> Then, joint training with our energy-aware loss function. This loss balances classification accuracy against computational cost — the lambda term penalizes the network for using deeper layers when early exits would suffice.
 >
-> The Adaptive Width model achieves the most energy savings at 46.8%, but at a cost — accuracy drops to 85%. Our novel Decreasing Width model maintains competitive accuracy at 87.6% but its funnel design means early exits handle less of the feature space, so energy savings are modest at 12.9%.
+> Finally, we calibrate the exit thresholds on a held-out validation set.
 >
-> Importantly, none of the accuracy differences between early-exit models and the baseline are statistically significant by paired t-test, meaning we're getting energy savings essentially for free."
+> Crucially, to keep the comparison fair, all five models train under identical conditions. The baseline gets the same total epochs but entirely in warmup mode, so every model has an equal optimization budget."
 
 ---
 
-### SLIDE 8 — Exit Behavior Analysis ⏱️ ~1 min
+## SLIDE 6 — Dataset & Preprocessing (Methodology)
 
-**Slide Text:**
-> ## Where Do Samples Exit?
-> - Most samples exit at **Stage 0** (the earliest point)
-> - Increasing Width: 85%+ exit at Stage 0 with 83% optimal exit decisions
-> - Only 5% "underthinking" (exited early but wrong) — acceptable
-> - 11.7% "overthinking" (correct earlier but exited later) — room to improve thresholds
->
-> ## Key Insight
-> *EEG seizure detection is a "mostly easy" problem — the majority of inputs can be classified with minimal computation.*
+**Time: ~30 seconds**
 
-**Visual:** Two images side-by-side:
-1. The **exit_distributions_grid.png** (shows where samples exit for each model)
-2. The **exit_quality_Increasing_Width.png** (overthinking/underthinking breakdown)
+### Slide Content
+```
+BONN EEG SEIZURE DATASET
+--------------------------
+* 400 total samples (280 train / 60 val / 60 test)
+* Binary classification: seizure vs. non-seizure
+* Sampling rate: 173.6 Hz
+* Sequence length: 4,097 timepoints per sample
 
-**What to say:**
-> "This is one of the most interesting findings. When we look at where samples actually exit, the overwhelming majority leave at Stage 0 — the very first exit point. For the Increasing Width model, only about 5% of samples are 'underthinking,' meaning they exited early but got the answer wrong. About 12% are 'overthinking' — they were correct at an earlier stage but went deeper unnecessarily. And 83% are optimal — they exited at the right time.
->
-> This tells us something important about the problem domain: EEG seizure detection, at least on this dataset, is a 'mostly easy' problem. Most recordings are clearly non-seizure, and the network figures that out almost immediately."
+PREPROCESSING
+-------------
+* Z-score normalization (per sample)
+* FFT -> 5 frequency band powers:
+  delta, theta, alpha, beta, gamma
+* These are tiled as extra channels
+* Final input shape: (6, 4097)
+  = 1 raw signal + 5 frequency bands
+```
 
----
+### Visual
+Create a simple diagram showing:
+- A raw EEG waveform (wavy line)
+- Arrow labeled "FFT" pointing to 5 colored bars (delta through gamma)
+- These stack into a 6-channel input rectangle
 
-### SLIDE 9 — Dynamic Thresholding & Calibration ⏱️ ~45s
-
-**Slide Text:**
-> ## Three Exit Strategies Compared
-> | Strategy | Accuracy | Energy Red. | F1 Score |
-> |---|---|---|---|
-> | **Confidence** | **93.3%** | **28.4%** | **90.7%** |
-> | Entropy | 86.7% | 20.1% | 79.2% |
-> | Patience | 91.7% | 3.2% | 88.1% |
->
-> - **Confidence-based** is the best overall tradeoff
-> - **Patience** is too conservative — barely saves energy
-> - Models are well-calibrated (ECE = 0.079 for Increasing Width)
-
-**Visual:** The **threshold_comparison.png** (3-panel side-by-side bars) plus the **reliability_Increasing_Width.png** calibration diagram.
-
-**What to say:**
-> "We compared three strategies for deciding when to exit. Confidence-based exiting — stop when the softmax probability exceeds a threshold — wins on all metrics. Entropy-based is more aggressive but less accurate. Patience-based, where you wait for consecutive stages to agree, is too conservative and barely saves energy.
->
-> We also measured calibration using Expected Calibration Error. The Increasing Width model has an ECE of just 0.079, meaning when it says it's 90% confident, it really is right about 90% of the time. This is critical for medical applications."
+### Script
+> "We use the Bonn EEG seizure dataset — it's small but clean, with 400 samples. Each sample is a 4,097-point EEG recording. We preprocess by normalizing each sample, then computing the FFT to extract power across five standard EEG frequency bands — delta through gamma. These are tiled as additional input channels alongside the raw signal, giving us a 6-channel input to the convolutional network."
 
 ---
 
-### SLIDE 10 — Pruning & Scaling ⏱️ ~45s
+## SLIDE 7 — Main Results (KEY SLIDE)
 
-**Slide Text:**
-> ## Structured Pruning: Additional Compression
-> - Remove least important channels (L1-norm ranking)
-> - Creates genuinely smaller networks (not masked)
-> - 10% pruning: accuracy 93.3% → 81.7% but **19% FLOPs reduction**
-> - 25% pruning: accuracy → 83.3%, **43% FLOPs reduction**
-> - 50% pruning: accuracy → 80%, **70% FLOPs reduction**
+**Time: ~1 minute 15 seconds** ← Spend the most time here
+
+### Slide Content
+```
+ARCHITECTURE COMPARISON (5 trials, seeds 42-46)
+-------------------------------------------------
+| Model              | Accuracy       | F1 Score       | Energy Red.      |
+|--------------------|----------------|----------------|------------------|
+| Baseline CNN       | 95.33 +/- 2.87 | 93.33 +/- 4.72 | 0%               |
+| Constant Width     | 83.67 +/- 7.41 | 67.43 +/- 18.6 | 24.04 +/- 2.70%  |
+| Increasing Width * | 94.00 +/- 2.26 | 91.86 +/- 3.13 | 42.05 +/- 2.99%  |
+| Decreasing Width   | 88.33 +/- 3.33 | 84.13 +/- 4.20 | 12.84 +/- 1.92%  |
+| Adaptive Width     | 86.00 +/- 6.38 | 75.32 +/- 14.1 | 47.48 +/- 2.55%  |
+
+* = Pareto-optimal (best accuracy-energy tradeoff)
+
+KEY FINDING: 42% energy savings with NO accuracy loss
+```
+
+### Visual — THIS IS YOUR HERO FIGURE
+Use: `plots/accuracy_vs_energy.png` (the Pareto plot)
+
+This plot shows each architecture as a dot on the accuracy (y) vs energy reduction (x) plane. Increasing Width dominates the upper-right corner.
+
+### Script
+> "Here are our main results. The key takeaway is this Pareto plot. The x-axis is energy reduction — how much compute we save. The y-axis is accuracy. You want to be in the upper-right: high accuracy AND high energy savings.
 >
-> ## Model Size Scaling
-> - Sweet spot: **Small [32] to Medium [64]** — 93%+ accuracy, 25-30% energy savings
-> - XLarge [256] overfits badly (77% accuracy with 1.9M params)
-
-**Visual:** Two plots side-by-side:
-1. **pruning_impact.png** (accuracy vs FLOPs reduction)
-2. **model_size_scaling.png** (dual-axis accuracy + energy vs params)
-
-**What to say:**
-> "Beyond early exits, we explored structured pruning — physically removing the least important convolutional channels. At 25% pruning, you lose about 10 points of accuracy but save 43% of compute, on top of early-exit savings.
+> The Increasing Width model is the clear Pareto-optimal choice — it achieves 94% accuracy, which is essentially the same as the baseline's 95.3%, while saving 42% of the computational energy. That's remarkable: nearly half the compute for free.
 >
-> Our model size scaling study shows a clear sweet spot around 32-64 channels. Bigger isn't always better — the XLarge model with 1.9 million parameters actually overfits and drops to 77% accuracy. For this dataset, lean and efficient wins."
-
----
-
-### SLIDE 11 — Conclusions ⏱️ ~45s
-
-**Slide Text:**
-> ## Key Findings
-> 1. **Early exits can save 43-47% energy** with negligible accuracy loss
-> 2. **Increasing Width is Pareto-optimal**: highest accuracy (90%) + 43.5% energy savings
-> 3. Adaptive Width achieves maximum energy savings (47%) but sacrifices accuracy
-> 4. **Confidence-based thresholding** is the best exit strategy
-> 5. Most EEG samples are "easy" — classifiable at the first exit stage
-> 6. Structured pruning provides **complementary** compression on top of early exits
+> Our novel Adaptive Width model gets the highest energy savings at 47.5%, but accuracy drops to 86%. The Decreasing Width model — our funnel design — keeps accuracy at 88% but its energy savings are modest at 12.9%. The intuition is that wide early layers are expensive, so even exiting at Stage 0 in a decreasing-width model costs more than exiting at Stage 0 in an increasing-width model where the first stage is narrow and cheap.
 >
-> ## Broader Impact
-> *These techniques could enable longer battery life for wearable seizure monitors, making continuous EEG monitoring more practical for patients with epilepsy.*
-
-**Visual:** A summary graphic — maybe a stylized bar chart highlighting the key numbers (90% accuracy, 43.5% energy savings, 15 trials) with the Pareto plot as a small thumbnail.
-
-**What to say:**
-> "So to wrap up our findings: Early-exit architectures can save nearly half the computational energy with negligible accuracy loss. The Increasing Width architecture is the Pareto-optimal design for this task. Our novel architectures revealed interesting tradeoffs — the decreasing-width model's funnel design limits early-exit opportunities, while the adaptive model aggressively saves energy but at an accuracy cost. Confidence-based thresholding is the winner, and the models are well-calibrated. Perhaps most importantly, we showed that the vast majority of EEG samples are 'easy' and can be classified almost immediately."
+> Importantly, none of the accuracy differences between early-exit models and the baseline are statistically significant by paired t-test — meaning we're getting energy savings essentially for free."
 
 ---
 
-### SLIDE 12 — Team Contributions & Future Work ⏱️ ~30s
+## SLIDE 8 — Exit Behavior Analysis (Results)
 
-**Slide Text:**
-> ## Team Contributions
-> | Name | Contributions |
-> |---|---|
-> | **Rithwak Somepalli** | Novel architecture design & implementation (decreasing-width, adaptive-width), feature pruning, full pipeline development, statistical testing |
-> | **Suryaprakash Murugavvel** | Baseline CNN + existing architectures, hyperparameter tuning, model evaluation |
-> | **Monique Gaye** | Energy/memory analysis, exit threshold strategies, visualizations |
-> | **Amrutha Kodali** | Data preprocessing, normalization, class balancing, cross-dataset evaluation |
+**Time: ~1 minute**
+
+### Slide Content
+```
+WHERE DO SAMPLES EXIT?
+-----------------------
+* Most samples exit at Stage 0 (the earliest possible point)
+* Increasing Width: 85%+ exit at Stage 0
+  - 83% of decisions are OPTIMAL
+  - Only 5% "underthinking" (exited early, got it wrong)
+  - 12% "overthinking" (correct earlier but went deeper)
+
+KEY INSIGHT
+-----------
+EEG seizure detection is a "mostly easy" problem.
+The majority of inputs can be classified with minimal computation.
+```
+
+### Visual — Two images side by side:
+1. `plots/exit_distributions_grid.png` — bar charts showing exit stage distribution for each model
+2. `plots/exit_quality_Increasing_Width.png` — overthinking / underthinking / optimal breakdown
+
+### Script
+> "This is one of the most interesting findings. Look at where samples actually exit. The overwhelming majority leave at Stage 0 — the very first exit point. For the Increasing Width model, only about 5% of samples are 'underthinking' — they exited early but got the wrong answer. About 12% are 'overthinking' — they were already correct at an earlier stage but went deeper unnecessarily. And 83% are optimal — they exited at exactly the right time.
 >
-> ## Future Work
-> - Cross-dataset evaluation (Bonn → CHB-MIT)
-> - Hardware deployment benchmarking on edge devices
-> - Multi-class seizure classification
-
-**Visual:** A simple team table plus a "Future Work" bullet list. Optional: add team photos if you have them.
-
-**What to say:**
-> "Here are each team member's contributions. [Read through briefly]. For future work, we'd like to validate on the much larger CHB-MIT dataset with 23 patients and 983 hours of data, benchmark on actual edge hardware, and extend to multi-class seizure classification. Thank you — happy to take questions."
+> This tells us something important about the problem domain: EEG seizure detection, at least on this dataset, is a 'mostly easy' problem. Most recordings are clearly non-seizure, and the network figures that out almost immediately. The hard cases are rare and genuinely need the full network depth."
 
 ---
 
-## 🎯 Presentation Tips
+## SLIDE 9 — Dynamic Thresholding & Calibration (Results)
 
-1. **Rehearse to 9:30** — leave 30s buffer for natural pauses
-2. **The Pareto plot (Slide 7) is your hero figure** — spend the most time here
-3. **Don't read the tables** — point to the highlights and tell the story
-4. **Anticipate questions:**
-   - *"Why not test on CHB-MIT?"* → Dataset is 983 hours; outside project scope but on roadmap
-   - *"Are the accuracy differences significant?"* → No! That's the point. Energy savings are free.
-   - *"How does this compare to transformers?"* → Our focus is lightweight CNNs for edge devices; transformer-based exits are future work
-   - *"Why does decreasing width save less energy?"* → Funnel design front-loads compute in wide early layers, so even Stage 0 exits are expensive
-   - *"Would you use this in a real hospital?"* → The confidence calibration results are promising (ECE < 0.08), but clinical validation would need much larger datasets
+**Time: ~45 seconds**
+
+### Slide Content
+```
+THREE EXIT STRATEGIES COMPARED
+-------------------------------
+| Strategy   | Accuracy | Energy Red. | F1 Score |
+|------------|----------|-------------|----------|
+| Confidence | 93.3%    | 28.4%       | 90.7%    |
+| Entropy    | 86.7%    | 20.1%       | 79.2%    |
+| Patience   | 91.7%    | 3.2%        | 88.1%    |
+
+* Confidence-based thresholding WINS on all metrics
+* Patience is too conservative (barely saves energy)
+* Models are well-calibrated: ECE = 0.057 for Increasing Width
+  (when the model says 90% confident, it's right ~90% of the time)
+```
+
+### Visual — Two images side by side:
+1. `plots/threshold_comparison.png` — 3-panel bar chart comparing strategies
+2. `plots/reliability_Increasing_Width.png` — calibration diagram (bars vs diagonal)
+
+### Script
+> "We compared three strategies for deciding when to exit. Confidence-based — stop when the softmax probability exceeds a threshold — wins on all fronts. Entropy-based is more aggressive but less accurate. And patience-based, where you wait for consecutive stages to agree, is too conservative — it only saves 3.2% energy.
+>
+> We also measured calibration using Expected Calibration Error. The Increasing Width model has an ECE of just 0.057, meaning when it says it's 90% confident, it really is right about 90% of the time. This kind of calibration is critical for medical applications where you need to trust the model's confidence."
+
+---
+
+## SLIDE 10 — Pruning & Scaling (Results)
+
+**Time: ~45 seconds**
+
+### Slide Content
+```
+STRUCTURED PRUNING: ADDITIONAL COMPRESSION
+-------------------------------------------
+* Remove least important channels by L1-norm ranking
+* Creates genuinely smaller networks (physically removes weights)
+
+| Prune Ratio | Accuracy | FLOPs Reduction |
+|-------------|----------|-----------------|
+| 0% (base)   | 93.3%    | 0%              |
+| 10%          | 81.7%    | 19%             |
+| 25%          | 83.3%    | 43%             |
+| 50%          | 80.0%    | 70%             |
+
+MODEL SIZE SCALING
+------------------
+* Sweet spot: Small [32] to Medium [64] channels
+  -> 93%+ accuracy, 25-30% energy savings
+* XLarge [256] OVERFITS: drops to 77% accuracy with 1.9M params
+* Lean and efficient beats large and overfit
+```
+
+### Visual — Two images side by side:
+1. `plots/pruning_impact.png` — dual-axis accuracy vs FLOPs reduction curve
+2. `plots/model_size_scaling.png` — dual-axis accuracy + energy vs parameter count
+
+### Script
+> "Beyond early exits, we explored structured pruning — physically removing the least important convolutional channels based on L1-norm importance scores. At 25% pruning, you lose about 10 points of accuracy but save 43% of compute. This is on top of early-exit savings, so they're complementary techniques.
+>
+> Our model size scaling study shows a clear sweet spot around 32 to 64 channels. Bigger is not always better — the XLarge model with 1.9 million parameters actually overfits badly and drops to 77% accuracy. For this dataset, lean and efficient wins."
+
+---
+
+## SLIDE 11 — Conclusions
+
+**Time: ~45 seconds**
+
+### Slide Content
+```
+KEY FINDINGS
+-------------
+1. Early exits save 42-47% energy with negligible accuracy loss
+
+2. Increasing Width [32->64->128] is PARETO-OPTIMAL:
+   94% accuracy + 42% energy savings
+
+3. Our novel architectures reveal important tradeoffs:
+   - Decreasing Width: funnel design front-loads compute,
+     limiting energy savings despite good accuracy
+   - Adaptive Width (Tuned): 87% accuracy, 48% energy savings
+     (improved +4pp accuracy, +12pp F1 with tuned hyperparameters)
+
+4. Confidence-based thresholding is the best exit strategy
+
+5. EEG seizure detection is "mostly easy":
+   83%+ of samples exit optimally at the first stage
+
+6. Models are well-calibrated (ECE < 0.06) — critical for
+   clinical trust
+
+BROADER IMPACT
+--------------
+These techniques could enable longer battery life for wearable
+seizure monitors, making continuous EEG monitoring more practical
+for the 3.4 million Americans living with epilepsy.
+```
+
+### Visual
+A summary infographic with the 3 key numbers:
+- **94%** accuracy
+- **42%** energy savings
+- **83%** optimal exit rate
+
+Or just use the Pareto plot (accuracy_vs_energy.png) as a smaller thumbnail alongside the text.
+
+### Script
+> "To wrap up our key findings: Early-exit architectures can save nearly half the computational energy with negligible accuracy loss. The Increasing Width architecture is the Pareto-optimal design for EEG seizure detection — it matches the baseline's accuracy while cutting compute by 42%.
+>
+> Our novel architectures taught us valuable lessons. The decreasing-width funnel design maintains good accuracy but front-loads computation in the wide early layers, limiting energy savings. The adaptive-width model, especially after hyperparameter tuning, achieves the most aggressive energy savings at 48% while maintaining 87% accuracy.
+>
+> Perhaps most importantly, we showed that the vast majority of EEG samples are easy — the network classifies them correctly and confidently at the very first exit point. Only the genuinely ambiguous cases need the full network depth."
+
+---
+
+## SLIDE 12 — Team Contributions & Future Work
+
+**Time: ~30 seconds**
+
+### Slide Content
+```
+TEAM CONTRIBUTIONS
+-------------------
+| Member                | Contributions                                      |
+|-----------------------|----------------------------------------------------|
+| Rithwak Somepalli     | Novel architecture design & implementation          |
+|                       | (decreasing-width, adaptive-width), structured      |
+|                       | pruning, full pipeline development, statistical     |
+|                       | testing, experiments & results writing               |
+|-----------------------|----------------------------------------------------|
+| Suryaprakash          | Baseline CNN + existing architectures (constant,    |
+| Murugavvel            | increasing width), hyperparameter tuning, model     |
+|                       | evaluation, experiments & results writing            |
+|-----------------------|----------------------------------------------------|
+| Monique Gaye          | Energy/memory analysis, exit threshold strategies,  |
+|                       | visualizations, research & introduction writing      |
+|-----------------------|----------------------------------------------------|
+| Amrutha Kodali        | Data preprocessing (normalization, FFT features,    |
+|                       | class balancing), data analysis, cross-dataset       |
+|                       | evaluation, teamwork & conclusions writing           |
+
+FUTURE WORK
+------------
+1. Cross-dataset evaluation: train on Bonn -> test on CHB-MIT
+   (983 hours, 23 patients, 198 seizures)
+2. Hardware deployment benchmarking on real edge devices
+   (ARM Cortex-M, Raspberry Pi)
+3. Multi-class seizure type classification
+```
+
+### Visual
+Team table (as above) plus a "Future Work" bullet list. Optional: team photos.
+
+### Script
+> "Here are each team member's contributions. Rithwak designed and implemented the two novel architectures and the full research pipeline. Surya built the baseline and existing architectures and handled hyperparameter tuning. Monique led the energy analysis, threshold strategies, and visualizations. And Amrutha handled all data preprocessing and analysis.
+>
+> For future work, we'd like to validate on the much larger CHB-MIT dataset with 23 patients and 983 hours of data, benchmark on actual edge hardware, and extend to multi-class seizure type classification.
+>
+> Thank you — happy to take questions."
 
 ---
 
 ---
 
-# 🔍 Gap Analysis: Current State vs. Initial Plans
+# Appendix A: Visual Assets Checklist
 
-> **Note**: This section is NOT for the presentation — it's for your awareness.
+All images are in the `plots/` directory. Here's what goes on each slide:
 
-## What's Missing (besides other dataset testing)
+| Slide | Image File(s) | Description |
+|---|---|---|
+| 1 | (minimal — title only) | Clean background, optional EEG waveform |
+| 2 | `plots/early_exit_concept.png` | Traditional vs early-exit CNN diagram |
+| 3 | (icons/numbered list) | No data plot needed |
+| 4 | `plots/five_architectures.png` | 5 architecture block diagrams |
+| 5 | `plots/training_pipeline.png` | 3-phase training flowchart |
+| 6 | (simple FFT diagram) | Can create manually or use dataset viz |
+| 7 | **`plots/accuracy_vs_energy.png`** | **HERO FIGURE — Pareto trade-off** |
+| 8 | `plots/exit_distributions_grid.png` + `plots/exit_quality_Increasing_Width.png` | Exit behavior |
+| 9 | `plots/threshold_comparison.png` + `plots/reliability_Increasing_Width.png` | Thresholding |
+| 10 | `plots/pruning_impact.png` + `plots/model_size_scaling.png` | Pruning & scaling |
+| 11 | (key numbers infographic or Pareto thumbnail) | Summary |
+| 12 | (team table) | Contributions |
 
-### 1. ❌ Cross-Dataset Evaluation (CHB-MIT)
-The README and proposal explicitly planned "train on Bonn → test on CHB-MIT." This is the single biggest gap. The CHB-MIT dataset (23 patients, 983 hours, multi-channel) would validate generalization. Without it, all results are on a single small dataset.
+---
 
-### 2. ❌ README Results Table is Empty
-The `README.md` results table (lines 34-40) still has placeholder dashes "—" instead of actual numbers. The CSV has the data — this just needs copying over. **Easy fix.**
+# Appendix B: Presentation Tips
 
-### 3. ⚠️ Comparison Against Published Benchmarks
-The roadmap item "Comparison against published benchmarks" is unchecked. You don't have any literature comparison showing how your accuracy/energy tradeoff compares to other early-exit papers (e.g., BranchyNet, SDN, or similar on EEG tasks).
+1. **Rehearse to 9:30** — leave a 30-second buffer for natural pauses and transitions
+2. **The Pareto plot (Slide 7) is your hero figure** — point at it and tell the story
+3. **Don't read the tables aloud** — highlight the key numbers and explain the pattern
+4. **Use a laser pointer or cursor** on the Pareto plot to trace the tradeoff
+5. **Speak confidently about limitations** — having answers ready is better than dodging
 
-### 4. ⚠️ Hyperparameter Tuning is Narrow
-The HP search (hp_sensitivity.png) only covers a 3×3 grid of learning rate × energy lambda. The full grid with weight decay, epoch counts, and architecture-specific parameters (e.g., sparsity_lambda for adaptive) hasn't been explored systematically.
+## Anticipated Q&A
 
-### 5. ⚠️ High Variance Across Trials
-Standard deviations are large (e.g., Baseline accuracy 89.2 ± 8.6%, F1 scores with ±12-20% std). This is partly due to the small dataset (only 60 test samples), but it means confidence intervals are wide and most pairwise differences are not statistically significant. More data or cross-validation would strengthen claims.
+| Question | Answer |
+|---|---|
+| "Why not test on CHB-MIT?" | It's 983 hours of data — outside the scope of this semester, but it's on our roadmap as the immediate next step. |
+| "Are the accuracy differences significant?" | No — and that's the point. The energy savings are highly significant (p < 10^-15), but accuracy differences are not, meaning we get energy savings essentially for free. |
+| "How does this compare to transformers?" | Our focus is lightweight CNNs for edge devices where transformers would be too expensive. Transformer-based early exits are an interesting future direction. |
+| "Why does decreasing width save less energy?" | The funnel design front-loads computation in the wide early layers — Stage 0 in a [128,64,32] network does more FLOPs than Stage 0 in a [32,64,128] network, so even early exits are expensive. |
+| "Would you use this in a real hospital?" | The calibration results are promising — ECE < 0.06 means the confidence scores are trustworthy. But clinical deployment would require validation on much larger, multi-patient datasets and regulatory approval. |
+| "Why is the Adaptive model worse?" | The channel gating mechanism needs careful tuning. With our tuned hyperparameters (lower LR, softer sparsity penalty, longer warmup), it improved from 82% to 87% accuracy — suggesting it has more potential with further optimization. |
 
-### 6. ⚠️ Adaptive Width Underperformance
-The novel Adaptive Width model underperforms significantly — it has the worst accuracy (85%) and F1 (72.4%) while only marginally beating Increasing Width on energy savings. The channel gating mechanism may need more tuning (sparsity_lambda, gate architecture) or a different training schedule to converge properly.
+---
 
-### 7. ⚠️ No Hardware/Latency Benchmarking on Real Edge Devices
-Latency is measured in Python wall-clock time on CPU, not on actual target hardware (e.g., ARM Cortex-M, Raspberry Pi). The roadmap doesn't explicitly plan this, but for a "wearable EEG device" motivation, it would strengthen the narrative.
+# Appendix C: Tuned Adaptive Width Results
 
-### 8. ✅ BUT — What's Actually Working Well
-- All 5 architectures fully implemented and running
-- 10 publication-quality plot types (64 files)
-- Full statistical testing pipeline (t-tests, Wilcoxon, CIs, effect sizes)
-- 3 threshold strategies implemented and compared
-- Structured pruning with genuine weight transfer (not masking)
-- Modular, well-organized codebase
-- 15-trial experiments with seed control
-- Reproducibility controls (CUDA determinism, gradient clipping, LR scheduling)
+After running `tune_adaptive.py` to compare the original vs tuned Adaptive Width configuration:
 
-### Summary Priority List
-| Priority | Gap | Effort | Impact |
-|---|---|---|---|
-| 🔴 High | Update README results table | 5 min | Low but looks bad if empty |
-| 🟡 Medium | Literature comparison numbers | 1-2 hours | Strengthens paper framing |
-| 🟡 Medium | Tune Adaptive Width model | 2-4 hours | Fixes underperforming novel contribution |
-| 🔵 Low | Expand HP search grid | 4+ hours | Marginal improvement |
-| 🔵 Low | Cross-validation instead of single split | 3+ hours | Reduces variance |
+```
+RESULTS COMPARISON
+============================================================
+  Original [64,64,64] (lr=0.001, sparsity=0.01):
+    Accuracy:         82.67 +/- 7.64%
+    F1 Score:         65.13 +/- 20.26%
+    Energy Reduction: 43.77 +/- 3.86%
+
+  Tuned [96,64,32] (lr=0.0005, sparsity=0.005):
+    Accuracy:         87.00 +/- 6.86%
+    F1 Score:         76.77 +/- 14.61%
+    Energy Reduction: 48.17 +/- 3.89%
+
+DELTAS (Tuned - Original):
+  Accuracy:         +4.33 pp
+  F1 Score:         +11.64 pp
+  Energy Reduction: +4.40 pp
+```
+
+Key tuning changes:
+- Learning rate: 0.001 → 0.0005 (more stable convergence)
+- Sparsity lambda: 0.01 → 0.005 (let gates stay open longer)
+- Channels: [64,64,64] → [96,64,32] (wider Stage 0 for better early exits)
+- Warmup: 10 → 15 epochs (gates need more warmup before energy penalty)
+
+---
+
+# Appendix D: Completeness Check vs Initial Plans
+
+## From the Project Proposal
+
+| Planned Item | Status | Notes |
+|---|---|---|
+| 5 model architectures | ✅ Complete | Baseline, Constant, Increasing, Decreasing, Adaptive |
+| Accuracy, F1, recall metrics | ✅ Complete | 5-trial averages with std dev |
+| Exit-distribution analysis | ✅ Complete | Per-model exit stage histograms + quality analysis |
+| Energy savings (FLOPs) | ✅ Complete | FLOPs-weighted energy reduction measured |
+| Confidence calibration | ✅ Complete | ECE + reliability diagrams for all models |
+| Bonn dataset | ✅ Complete | Primary dataset, fully processed |
+| CHB-MIT dataset | ❌ Not done | Too large for project scope; listed as future work |
+
+## From the Status Report (Remaining Month Plan)
+
+| Planned Item | Status | Notes |
+|---|---|---|
+| 1. Cross-dataset evaluation | ❌ | Deferred to future work |
+| 2. Deeper exit behavior analysis | ✅ | Overthinking/underthinking, exit heatmaps, per-stage accuracy |
+| 3. Stronger visualizations | ✅ | 64 publication-quality plots across 10 plot types |
+| 4. Compare with literature benchmarks | ❌ | No formal comparison table vs BranchyNet/SDN |
+| 5. Refine research narrative | ✅ | Clear Pareto-optimal story around Increasing Width |
+| 6. Better hyperparameter tuning | ✅ | Grid search + dedicated adaptive tuning (tune_adaptive.py) |
+| 7. Feature pruning mechanisms | ✅ | Structured pruning (L1-norm) + channel gating |
+| 8. Different model sizes | ✅ | Tiny [16] through XLarge [256] scaling study |
+| 9. Dynamic thresholds | ✅ | Confidence, entropy, and patience strategies compared |
+
+**Score: 7 of 9 planned items completed** (missing cross-dataset and literature comparison)

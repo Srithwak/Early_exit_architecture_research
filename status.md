@@ -1,12 +1,12 @@
 # Early Exit Architecture Research — Status Report
 
-> **Last Updated:** 2026-04-24 20:38 ET
+> **Last Updated:** 2026-04-25 09:28 ET
 
 ---
 
-## Project Status: Fully Validated
+## Project Status: Presentation-Ready
 
-All experiments run end-to-end. Pipeline produces reproducible results, statistical tests, and publication-quality plots.
+All experiments run end-to-end. Pipeline produces reproducible results, statistical tests, and publication-quality plots. Tuned Adaptive Width model shows +4.3pp accuracy and +11.6pp F1 improvement over defaults. Presentation guide, diagrams, and scripts are complete.
 
 ---
 

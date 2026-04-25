@@ -109,11 +109,11 @@ def run_adaptive_trials(config_name, config, num_trials=5, base_seed=42):
 def print_comparison(name, metrics):
     """Print formatted results for one configuration."""
     print(f"\n  {name}:")
-    print(f"    Accuracy:         {np.mean(metrics['acc']):.2f} ± {np.std(metrics['acc']):.2f}%")
-    print(f"    Recall:           {np.mean(metrics['recall']):.2f} ± {np.std(metrics['recall']):.2f}%")
-    print(f"    F1 Score:         {np.mean(metrics['f1']):.2f} ± {np.std(metrics['f1']):.2f}%")
-    print(f"    ECE:              {np.mean(metrics['ece']):.4f} ± {np.std(metrics['ece']):.4f}")
-    print(f"    Energy Reduction: {np.mean(metrics['energy_red']):.2f} ± {np.std(metrics['energy_red']):.2f}%")
+    print(f"    Accuracy:         {np.mean(metrics['acc']):.2f} +/- {np.std(metrics['acc']):.2f}%")
+    print(f"    Recall:           {np.mean(metrics['recall']):.2f} +/- {np.std(metrics['recall']):.2f}%")
+    print(f"    F1 Score:         {np.mean(metrics['f1']):.2f} +/- {np.std(metrics['f1']):.2f}%")
+    print(f"    ECE:              {np.mean(metrics['ece']):.4f} +/- {np.std(metrics['ece']):.4f}")
+    print(f"    Energy Reduction: {np.mean(metrics['energy_red']):.2f} +/- {np.std(metrics['energy_red']):.2f}%")
 
 
 def main():
@@ -152,18 +152,18 @@ def main():
     }
 
     print("=" * 60)
-    print("ADAPTIVE WIDTH — TUNING COMPARISON (A/B Test)")
+    print("ADAPTIVE WIDTH -- TUNING COMPARISON (A/B Test)")
     print(f"  Trials: {NUM_TRIALS}")
     print("=" * 60)
 
-    print(f"\n{'─'*60}")
-    print("Config A (Original): ch=[64,64,64], lr=0.001, λ_e=0.02, λ_s=0.01")
-    print(f"{'─'*60}")
+    print(f"\n{'-'*60}")
+    print("Config A (Original): ch=[64,64,64], lr=0.001, e_lambda=0.02, s_lambda=0.01")
+    print(f"{'-'*60}")
     original_metrics = run_adaptive_trials("Original", original_config, NUM_TRIALS)
 
-    print(f"\n{'─'*60}")
-    print("Config B (Tuned): ch=[96,64,32], lr=0.0005, λ_e=0.03, λ_s=0.005")
-    print(f"{'─'*60}")
+    print(f"\n{'-'*60}")
+    print("Config B (Tuned): ch=[96,64,32], lr=0.0005, e_lambda=0.03, s_lambda=0.005")
+    print(f"{'-'*60}")
     tuned_metrics = run_adaptive_trials("Tuned", tuned_config, NUM_TRIALS)
 
     # ── Side-by-side comparison ──
@@ -178,19 +178,19 @@ def main():
     delta_f1 = np.mean(tuned_metrics['f1']) - np.mean(original_metrics['f1'])
     delta_er = np.mean(tuned_metrics['energy_red']) - np.mean(original_metrics['energy_red'])
 
-    print(f"\n{'─'*60}")
-    print("DELTAS (Tuned − Original):")
+    print(f"\n{'-'*60}")
+    print("DELTAS (Tuned - Original):")
     print(f"  Accuracy:         {delta_acc:+.2f} pp")
     print(f"  F1 Score:         {delta_f1:+.2f} pp")
     print(f"  Energy Reduction: {delta_er:+.2f} pp")
-    print(f"{'─'*60}")
+    print(f"{'-'*60}")
 
     if delta_acc > 0 and delta_f1 > 0:
-        print("✅ Tuned config improves accuracy AND F1.")
+        print("[OK] Tuned config improves accuracy AND F1.")
     elif delta_acc > 0:
-        print("⚠️ Tuned config improves accuracy but F1 regressed.")
+        print("[WARN] Tuned config improves accuracy but F1 regressed.")
     else:
-        print("❌ Tuned config did not improve accuracy. Try different settings.")
+        print("[FAIL] Tuned config did not improve accuracy. Try different settings.")
 
     print("\n[DONE]")
 

@@ -141,12 +141,14 @@ The Bonn dataset is the primary development dataset due to its manageable size. 
 - [x] Decreasing-width early-exit architecture (novel)
 - [x] Adaptive-width early-exit architecture (novel)
 - [ ] Cross-dataset evaluation (train on Bonn → test on CHB-MIT)
-- [ ] Deeper exit behavior analysis (which inputs exit early and why)
-- [ ] Hyperparameter tuning across all 5 architectures
-- [ ] Advanced feature pruning mechanisms for adaptive-width model
-- [ ] Trade-off curves and calibration plots
+- [x] Deeper exit behavior analysis (overthinking/underthinking, exit heatmaps, per-stage accuracy)
+- [x] Hyperparameter tuning (grid search over LR × energy lambda × weight decay)
+- [x] Advanced feature pruning — structured pruning (L1-norm channel removal) + channel gating
+- [x] Trade-off curves (Pareto plots), calibration diagrams, exit distributions, confidence histograms
 - [ ] Comparison against published benchmarks
-- [ ] Transition from fixed confidence threshold to dynamic threshold
+- [x] Dynamic thresholding — confidence, entropy, and patience strategies implemented and compared
+- [x] Statistical significance testing (paired t-tests, Wilcoxon, Cohen's d, 95% CIs)
+- [x] Model size scaling experiment (Tiny → XLarge)
 
 ---
 
