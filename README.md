@@ -29,15 +29,15 @@ The hypothesis behind the novel architectures: early layers need to capture broa
 
 ## Current Results
 
-> All results are on the Bonn seizure dataset. Models are not yet fully hyperparameter-tuned — these are strong baselines, not final numbers.
+> All results on the Bonn EEG seizure dataset (5 trials, seeds 42–46, confidence thresholding). Energy reduction measured via FLOPs-weighted early-exit savings.
 
 | Model | Accuracy | Recall | F1 Score | Energy Reduction |
 |---|---|---|---|---|
-| Baseline CNN | — | — | — | — |
-| Constant-Width EE | — | — | — | — |
-| Increasing-Width EE | — | — | — | — |
-| Decreasing-Width EE | — | — | — | — |
-| Adaptive-Width EE | — | — | — | — |
+| Baseline CNN (Control) | 95.33 ± 2.87% | 92.89 ± 6.83% | 93.33 ± 4.72% | 0% |
+| Constant-Width EE | 83.67 ± 7.41% | 67.78 ± 15.41% | 67.43 ± 18.60% | 24.04 ± 2.70% |
+| **Increasing-Width EE** ⭐ | **94.00 ± 2.26%** | **91.56 ± 4.13%** | **91.86 ± 3.13%** | **42.05 ± 2.99%** |
+| Decreasing-Width EE | 88.33 ± 3.33% | 83.78 ± 5.33% | 84.13 ± 4.20% | 12.84 ± 1.92% |
+| Adaptive-Width EE | 86.00 ± 6.38% | 73.78 ± 13.31% | 75.32 ± 14.11% | 47.48 ± 2.55% |
 
 ---
 
