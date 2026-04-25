@@ -24,6 +24,8 @@ from evaluate import inspect_data, evaluate_model_advanced
 from analysis import (collect_exit_statistics, analyze_exit_patterns,
                       compute_difficulty_scores, print_analysis_report)
 from visualize import generate_all_plots
+from statistical_tests import (compute_all_statistics, print_statistical_report,
+                               confidence_interval)
 
 
 # ──────────────────────────────────────────────
@@ -41,7 +43,7 @@ class ExperimentConfig:
     use_freq_bands: bool = True
     in_channels: int = 6         # 1 Raw Time-Series + 5 Frequency Bands
     num_classes: int = 2
-    num_trials: int = 3          # Multiple trials for statistical validity
+    num_trials: int = 5          # Multiple trials for statistical validity
     base_seed: int = 42
     # Training — same total epochs for ALL models (unbiased)
     warmup_epochs: int = 10
@@ -135,6 +137,7 @@ class ResearchPipeline:
         )
         self.class_weights = self.class_weights.to(self.device)
         self.results = []
+        self.all_trial_metrics = {}  # Raw per-trial data for statistical tests
         self.viz_data = {"per_model": {}, "exit_distributions": {}}
 
     def _build_model(self, config_dict):
@@ -278,18 +281,21 @@ class ResearchPipeline:
                     print(f"    Acc: {acc*100:.2f}%, F1: {f1*100:.2f}%, "
                           f"ER: {energy_red*100:.2f}%")
 
+                # Store raw trial metrics for statistical testing
+                self.all_trial_metrics[name] = trial_metrics
+
                 # Aggregate
                 result = {
                     "Model": name,
                     "Lambda": e_lambda,
                     "Params": total_params,
                     "MFLOPs": f"{total_flops:.2f}",
-                    "Accuracy (%)": f"{np.mean(trial_metrics['acc']):.2f} ± {np.std(trial_metrics['acc']):.2f}",
-                    "Recall (%)": f"{np.mean(trial_metrics['recall']):.2f} ± {np.std(trial_metrics['recall']):.2f}",
-                    "F1 Score (%)": f"{np.mean(trial_metrics['f1']):.2f} ± {np.std(trial_metrics['f1']):.2f}",
-                    "ECE": f"{np.mean(trial_metrics['ece']):.4f} ± {np.std(trial_metrics['ece']):.4f}",
-                    "Energy Red (%)": f"{np.mean(trial_metrics['energy_red']):.2f} ± {np.std(trial_metrics['energy_red']):.2f}",
-                    "Latency (ms)": f"{np.mean(trial_metrics['latency']):.2f} ± {np.std(trial_metrics['latency']):.2f}",
+                    "Accuracy (%)": f"{np.mean(trial_metrics['acc']):.2f} +/- {np.std(trial_metrics['acc']):.2f}",
+                    "Recall (%)": f"{np.mean(trial_metrics['recall']):.2f} +/- {np.std(trial_metrics['recall']):.2f}",
+                    "F1 Score (%)": f"{np.mean(trial_metrics['f1']):.2f} +/- {np.std(trial_metrics['f1']):.2f}",
+                    "ECE": f"{np.mean(trial_metrics['ece']):.4f} +/- {np.std(trial_metrics['ece']):.4f}",
+                    "Energy Red (%)": f"{np.mean(trial_metrics['energy_red']):.2f} +/- {np.std(trial_metrics['energy_red']):.2f}",
+                    "Latency (ms)": f"{np.mean(trial_metrics['latency']):.2f} +/- {np.std(trial_metrics['latency']):.2f}",
                 }
                 self.results.append(result)
 
@@ -305,6 +311,14 @@ class ResearchPipeline:
                     "analysis": last_analysis,
                     "exit_df": last_exit_df,
                 }
+
+        # Run statistical significance tests
+        if self.all_trial_metrics and self.config.num_trials >= 2:
+            print("\n--- Running Statistical Significance Tests ---")
+            model_names = list(self.all_trial_metrics.keys())
+            stats_results = compute_all_statistics(self.all_trial_metrics, model_names)
+            print_statistical_report(stats_results)
+            self.viz_data["statistical_tests"] = stats_results
 
         df = pd.DataFrame(self.results)
         self.viz_data["results_df"] = df
@@ -453,6 +467,49 @@ class ResearchPipeline:
             df.to_csv(csv_path, index=False)
             print(f"Results saved to {csv_path}")
 
+        # Save comprehensive JSON with raw trial data
+        json_output = {
+            "config": {
+                "batch_size": self.config.batch_size,
+                "seq_len": self.config.seq_len,
+                "in_channels": self.config.in_channels,
+                "num_classes": self.config.num_classes,
+                "num_trials": self.config.num_trials,
+                "base_seed": self.config.base_seed,
+                "warmup_epochs": self.config.warmup_epochs,
+                "joint_epochs": self.config.joint_epochs,
+                "learning_rate": self.config.learning_rate,
+                "weight_decay": self.config.weight_decay,
+                "energy_lambda": self.config.energy_lambda,
+                "threshold_strategy": self.config.threshold_strategy,
+            },
+            "results_summary": self.results,
+            "raw_trial_metrics": {
+                name: {k: [float(v) for v in vals] for k, vals in metrics.items()}
+                for name, metrics in self.all_trial_metrics.items()
+            },
+        }
+
+        # Add statistical test results if available
+        if "statistical_tests" in self.viz_data:
+            stats = self.viz_data["statistical_tests"]
+            json_stats = {}
+            for key in ["confidence_intervals"]:
+                if key in stats:
+                    json_stats[key] = stats[key]
+            if "pairwise_comparisons" in stats:
+                json_stats["pairwise_comparisons"] = {}
+                for metric, comparisons in stats["pairwise_comparisons"].items():
+                    json_stats["pairwise_comparisons"][metric] = [
+                        {k: v for k, v in c.items()} for c in comparisons
+                    ]
+            json_output["statistical_analysis"] = json_stats
+
+        json_path = os.path.join(self.config.results_dir, "experiment_results.json")
+        with open(json_path, 'w') as f:
+            json.dump(json_output, f, indent=2, default=str)
+        print(f"Comprehensive results saved to {json_path}")
+
 
 # ──────────────────────────────────────────────
 # CLI Entry Point
@@ -552,4 +609,4 @@ if __name__ == "__main__":
     # Generate all visualizations and save results
     pipeline.generate_visualizations()
     pipeline.save_results()
-    print("\n✓ All experiments complete.")
+    print("\n[DONE] All experiments complete.")

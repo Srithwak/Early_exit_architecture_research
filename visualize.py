@@ -24,8 +24,8 @@ def plot_accuracy_vs_energy(results_df, plots_dir):
     """1. Pareto frontier of accuracy vs energy reduction with error bars."""
     fig, ax = plt.subplots(figsize=(10, 7))
     for idx, row in results_df.iterrows():
-        acc_str = str(row.get("Accuracy (%)", "0"))
-        er_str = str(row.get("Energy Red (%)", "0"))
+        acc_str = str(row.get("Accuracy (%)", "0")).replace("+/-", "±")
+        er_str = str(row.get("Energy Red (%)", "0")).replace("+/-", "±")
         try:
             acc_mean = float(acc_str.split("±")[0].strip())
             acc_std = float(acc_str.split("±")[1].strip()) if "±" in acc_str else 0

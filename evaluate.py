@@ -15,7 +15,7 @@ def inspect_data(train_dl):
 
     mean_val = X_sample.mean().item()
     std_val = X_sample.std().item()
-    print(f"3. Normalization: Mean ≈ {mean_val:.4f}, Std Dev ≈ {std_val:.4f} (Z-score normalized)")
+    print(f"3. Normalization: Mean ~= {mean_val:.4f}, Std Dev ~= {std_val:.4f} (Z-score normalized)")
 
     y_all = train_dl.dataset.y
     counts = np.bincount(y_all)

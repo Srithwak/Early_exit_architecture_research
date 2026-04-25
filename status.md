@@ -1,108 +1,119 @@
 # Early Exit Architecture Research — Status Report
 
-> **Last Updated:** 2026-04-23 23:12 ET
+> **Last Updated:** 2026-04-24 20:38 ET
 
 ---
 
-## ✅ Completed
+## Project Status: Fully Validated
 
-### 1. Bias Audit & Reproducibility ✅
-**What was done:**
-- Added `set_seed(seed)` to `train.py` — controls `torch`, `numpy`, `random`, CUDA, and cuDNN determinism
-- Added gradient clipping (`max_grad_norm=1.0`) to both training phases
-- Added LR scheduler support (`ReduceLROnPlateau`) to both training phases
-- **Consolidated all 5 model configurations** into a single `ResearchPipeline` class in `main.py`
-- **Deprecated `run_pipeline()`** — all experiments now run through `ResearchPipeline`
-- **Fixed unequal training**: baseline models now train for `warmup_epochs + joint_epochs` total in warmup mode, matching the total epoch count of early-exit models
-- **Fixed inconsistent `target_acc`**: unified to a configurable `ExperimentConfig.target_acc` (default 0.95)
-- Multi-trial averaging with mean ± std reporting (default 3 trials)
-- Per-trial seed control: `base_seed + trial_index`
+All experiments run end-to-end. Pipeline produces reproducible results, statistical tests, and publication-quality plots.
 
-### 2. Dynamic Thresholding ✅
-**What was done:**
-- Implemented 3 exit strategies in `train.py`:
-  - **Confidence** (original): exit when max softmax probability > threshold
-  - **Entropy**: exit when prediction entropy < threshold (calibrated from correct-prediction percentile)
-  - **Patience**: exit when N consecutive stages predict the same class
-- `calibrate_thresholds()` now returns a strategy dict with metadata instead of a bare list
-- `evaluate.py` updated with `_should_exit()` dispatcher that handles all strategies
-- Both `evaluate_model()` and `evaluate_model_advanced()` accept either old-style lists or new strategy dicts
-- Added `--strategy` CLI flag to select threshold strategy
-- Added `run_threshold_strategy_comparison()` to compare all strategies on same model
+---
 
-### 3. Deeper Exit Behavior Analysis ✅
-**What was done:**
-- Created `analysis.py` with:
-  - `collect_exit_statistics()` — per-sample data including ALL stage predictions (not just exit stage)
-  - `analyze_exit_patterns()` — per-class exits, per-stage accuracy/confidence/entropy, overthinking, underthinking
-  - `compute_difficulty_scores()` — assigns difficulty based on earliest correct stage
-  - `print_analysis_report()` — formatted summary
+## Completed Components
+
+### 1. Bias Audit & Reproducibility
+- `set_seed(seed)` controls `torch`, `numpy`, `random`, CUDA, and cuDNN determinism
+- Gradient clipping (`max_grad_norm=1.0`) in both training phases
+- LR scheduler support (`ReduceLROnPlateau`)
+- All models train under identical conditions (same total epochs, same seeds)
+- Baseline gets same total epoch budget (all in warmup mode)
+- Multi-trial averaging with mean +/- std reporting (default 5 trials)
+
+### 2. Dynamic Thresholding (3 strategies)
+- **Confidence**: exit when max softmax probability > threshold
+- **Entropy**: exit when prediction entropy < threshold (calibrated from correct-prediction percentile)
+- **Patience**: exit when N consecutive stages predict the same class
+- `calibrate_thresholds()` returns strategy dict with metadata
+- `_should_exit()` dispatcher handles all strategies
+- `--strategy` CLI flag, `run_threshold_strategy_comparison()`
+
+### 3. Deeper Exit Behavior Analysis
+- `collect_exit_statistics()` — per-sample data including ALL stage predictions
+- `analyze_exit_patterns()` — per-class exits, per-stage accuracy/confidence/entropy
 - **Overthinking detection**: samples correct at earlier stage but exited later
 - **Underthinking detection**: samples that exited early but incorrectly
-- Integrated into `ResearchPipeline.run_architecture_ablation()` — analysis runs on last trial of each model
+- `compute_difficulty_scores()` — assigns difficulty based on earliest correct stage
 
-### 4. Feature Pruning Mechanisms ✅
-**What was done:**
-- Added to `models.py`:
-  - `compute_channel_importance()` — L1-norm importance scores per Conv1d channel
-  - `apply_structured_pruning()` — creates genuinely smaller network (not masked), transfers surviving weights
-  - `_transfer_pruned_weights()` — handles Conv1d + BatchNorm weight transfer
-- Reports parameter reduction and FLOPs reduction after pruning
-- Added `run_pruning_experiment()` to pipeline — ablates over prune ratios [0%, 10%, 25%, 50%]
+### 4. Feature Pruning Mechanisms
+- `compute_channel_importance()` — L1-norm importance scores per Conv1d channel
+- `apply_structured_pruning()` — creates genuinely smaller network (not masked)
+- `_transfer_pruned_weights()` — handles Conv1d + BatchNorm weight transfer
+- Ablation over prune ratios [0%, 10%, 25%, 50%]
 - Post-pruning fine-tuning with reduced learning rate
 
-### 5. Model Size Experiments ✅
-**What was done:**
-- Added 5 model sizes: Tiny [16,16,16], Small [32,32,32], Medium [64,64,64], Large [128,128,128], XLarge [256,256,256]
+### 5. Model Size Experiments
+- 5 model sizes: Tiny [16], Small [32], Medium [64], Large [128], XLarge [256]
 - Each tested with identical training protocol
-- `count_parameters()` method added to `GenericEarlyExitNet`
-- Added `run_model_size_experiment()` to pipeline
 - Reports params, MFLOPs, accuracy, F1, energy reduction
 
-### 6. Better Hyperparameter Tuning ✅
-**What was done:**
-- Created `tuning.py` with:
-  - `HyperparameterSearchSpace` dataclass defining the grid
-  - `run_hyperparameter_search()` — grid search with random subsampling for large grids
-  - Supports both adaptive (with sparsity_lambda) and standard models
-  - Results saved as CSV, ranked by F1 score
-  - Top-5 configurations printed automatically
-- Added `--run-tuning` CLI flag
-- Default search space: lr × energy_lambda × weight_decay × warmup_epochs × joint_epochs
+### 6. Hyperparameter Tuning
+- `HyperparameterSearchSpace` dataclass defining the grid
+- `run_hyperparameter_search()` — grid search with random subsampling
+- Supports both adaptive (with sparsity_lambda) and standard models
+- Results saved as CSV, ranked by F1 score
 
-### 7. Stronger Visualizations ✅
-**What was done:**
-- Created `visualize.py` with 10 publication-quality plot types:
-  1. **Accuracy vs Energy Pareto** — with error bars from multi-trial runs
-  2. **Reliability / Calibration Diagram** — per-model, with ECE annotated
-  3. **Exit Distribution Heatmap** — classes × stages, normalized percentages
-  4. **Per-Stage Accuracy Breakdown** — bar chart with sample counts
-  5. **Confidence Distributions** — correct vs incorrect, per exit stage
-  6. **Overthinking/Underthinking Chart** — exit quality summary
-  7. **HP Sensitivity Heatmap** — lr vs energy_lambda → F1
-  8. **Model Size Scaling** — dual-axis accuracy + energy vs parameters
-  9. **Pruning Impact** — accuracy and FLOPs reduction vs prune ratio
-  10. **Threshold Strategy Comparison** — side-by-side bar charts
+### 7. Visualizations (10 plot types)
+1. Accuracy vs Energy Pareto (with error bars)
+2. Reliability / Calibration Diagram (per-model, with ECE)
+3. Exit Distribution Heatmap (classes x stages)
+4. Per-Stage Accuracy Breakdown
+5. Confidence Distributions (correct vs incorrect)
+6. Overthinking/Underthinking Chart
+7. HP Sensitivity Heatmap (LR vs energy_lambda -> F1)
+8. Model Size Scaling (dual-axis)
+9. Pruning Impact (accuracy + FLOPs vs prune ratio)
+10. Threshold Strategy Comparison (side-by-side bars)
 - All plots saved as PNG (300 DPI) + PDF
-- Consistent seaborn-whitegrid style
-- `generate_all_plots()` master function
+
+### 8. Statistical Significance Testing (NEW)
+- `statistical_tests.py` module with:
+  - Paired t-tests between all model pairs
+  - Wilcoxon signed-rank tests (non-parametric alternative)
+  - Cohen's d effect sizes with magnitude interpretation
+  - 95% confidence intervals using t-distribution
+  - Comprehensive formatted reporting
+- Automatically runs after architecture ablation
+- Results saved in `experiment_results.json`
 
 ---
 
-## 📋 CLI Usage
+## File Structure
+
+```
+ML_project/
+  main.py              — ResearchPipeline class + CLI (--run-all, etc.)
+  quick_validate.py    — Fast validation script (3+3 epochs, 2 trials)
+  models.py            — GenericEarlyExitNet, AdaptiveEarlyExitNet, losses, pruning
+  train.py             — 2-phase training + 3 threshold calibration strategies
+  evaluate.py          — Strategy-aware eval with ECE, latency, per-sample data
+  analysis.py          — Overthinking/underthinking detection, difficulty scoring
+  visualize.py         — 10 publication-quality plot types
+  tuning.py            — Hyperparameter grid/random search
+  statistical_tests.py — Paired t-tests, Wilcoxon, CIs, effect sizes
+  dataset.py           — Bonn EEG loader with FFT frequency band features
+  data/bonn/           — Preprocessed Bonn EEG data (280 train, 60 val, 60 test)
+  results/             — CSV + JSON output
+  plots/               — 64 plot files (PNG + PDF)
+```
+
+---
+
+## CLI Usage
 
 ```bash
-# Run architecture ablation (default)
-python main.py --run-ablation
+# Quick validation (~13 min on CPU)
+python quick_validate.py
 
-# Run all experiments
-python main.py --run-all
+# Full research run (~40 min on CPU)
+python main.py --run-all --trials 5 --seed 42
 
-# Run specific experiments
-python main.py --run-sizes          # Model size scaling
-python main.py --run-pruning        # Structured pruning
-python main.py --run-strategies     # Threshold strategy comparison
-python main.py --run-tuning         # Hyperparameter search
+# Individual experiments
+python main.py --run-ablation --trials 5
+python main.py --run-strategies
+python main.py --run-sizes
+python main.py --run-pruning
+python main.py --run-tuning
 
 # Options
 python main.py --run-ablation --seed 42 --trials 5 --strategy entropy
@@ -110,23 +121,12 @@ python main.py --run-ablation --seed 42 --trials 5 --strategy entropy
 
 ---
 
-## 🧪 Context for Future Conversations
+## Key Design Decisions (Unbiased Research)
 
-This project is a research study on early exit neural network architectures for EEG seizure classification using the Bonn dataset. The core idea: attach intermediate classifiers to a CNN so "easy" samples can exit early, saving computation, while "hard" samples use the full network.
-
-**Key files:**
-- `dataset.py` — Loads Bonn EEG data with FFT frequency band features (6 channels: 1 raw + 5 frequency bands)
-- `models.py` — `GenericEarlyExitNet`, `AdaptiveEarlyExitNet` (with ChannelGate), loss functions, **structured pruning**
-- `train.py` — Two-phase training + **3 threshold calibration strategies** (confidence/entropy/patience)
-- `evaluate.py` — Strategy-aware evaluation with ECE, latency, **per-sample data collection**
-- `analysis.py` — **Per-sample exit behavior analysis**, overthinking/underthinking detection, difficulty scoring
-- `tuning.py` — **Hyperparameter grid search** with CSV output
-- `visualize.py` — **10 publication-quality plot types**
-- `main.py` — `ResearchPipeline` class orchestrating all experiments with CLI interface
-
-**Important design decisions:**
-- All models trained under identical conditions (same total epochs, same seeds) for unbiased comparison
-- Baseline gets same total epoch budget, all in warmup mode
-- Multiple trials per configuration with mean ± std reporting
-- Dynamic thresholding replaces fixed accuracy targets
-- Structured pruning creates genuinely smaller networks, not masked ones
+1. All models trained under identical conditions (same total epochs, same seeds)
+2. Baseline gets same total epoch budget, all in warmup mode
+3. Multiple trials per configuration with mean +/- std reporting
+4. Statistical significance tests (paired t-tests + Wilcoxon) between all model pairs
+5. Class imbalance handled via weighted cross-entropy loss
+6. Structured pruning creates genuinely smaller networks, not masked ones
+7. Three orthogonal threshold strategies compared on the same trained model
