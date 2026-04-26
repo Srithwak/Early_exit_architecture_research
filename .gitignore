@@ -1,6 +1,31 @@
+# Environment & secrets
 .env
-__pycache__
-results
-papers
-.venv
-.vscode
+
+# Python
+__pycache__/
+*.pyc
+venv/
+.venv/
+
+# IDE
+.vscode/
+
+# Data & large files
+data/
+*.zip
+
+# Results (regeneratable)
+results/
+results_ecg/
+results_mitbih/
+results_tuned/
+papers/
+
+# Plots (regeneratable)
+plots/
+plots_ecg/
+plots_mitbih/
+plots_datasets/
+
+# OS
+.DS_Store
