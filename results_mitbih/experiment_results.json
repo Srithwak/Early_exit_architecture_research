@@ -1,0 +1,181 @@
+{
+  "dataset": "MIT-BIH Arrhythmia",
+  "config": {
+    "batch_size": 128,
+    "seq_len": 187,
+    "in_channels": 6,
+    "num_classes": 5,
+    "num_trials": 1,
+    "base_seed": 42,
+    "warmup_epochs": 1,
+    "joint_epochs": 1,
+    "learning_rate": 0.001,
+    "weight_decay": 0.0001,
+    "energy_lambda": 0.02,
+    "threshold_strategy": "confidence"
+  },
+  "results_summary": [
+    {
+      "Model": "Base CNN (Control)",
+      "Lambda": 0.02,
+      "Params": 86097,
+      "MFLOPs": "2.24",
+      "Accuracy (%)": "94.03 +/- 0.00",
+      "Recall (%)": "89.90 +/- 0.00",
+      "F1 Score (%)": "82.11 +/- 0.00",
+      "ECE": "0.0125 +/- 0.0000",
+      "Energy Red (%)": "0.00 +/- 0.00",
+      "Latency (ms)": "0.43 +/- 0.00"
+    },
+    {
+      "Model": "Constant Width",
+      "Lambda": 0.02,
+      "Params": 86097,
+      "MFLOPs": "2.24",
+      "Accuracy (%)": "91.07 +/- 0.00",
+      "Recall (%)": "69.94 +/- 0.00",
+      "F1 Score (%)": "66.60 +/- 0.00",
+      "ECE": "0.2581 +/- 0.0000",
+      "Energy Red (%)": "8.17 +/- 0.00",
+      "Latency (ms)": "0.54 +/- 0.00"
+    },
+    {
+      "Model": "Increasing Width",
+      "Lambda": 0.02,
+      "Params": 122353,
+      "MFLOPs": "1.34",
+      "Accuracy (%)": "89.78 +/- 0.00",
+      "Recall (%)": "77.95 +/- 0.00",
+      "F1 Score (%)": "72.07 +/- 0.00",
+      "ECE": "0.2445 +/- 0.0000",
+      "Energy Red (%)": "33.60 +/- 0.00",
+      "Latency (ms)": "0.31 +/- 0.00"
+    },
+    {
+      "Model": "Decreasing Width",
+      "Lambda": 0.02,
+      "Params": 128305,
+      "MFLOPs": "6.22",
+      "Accuracy (%)": "92.06 +/- 0.00",
+      "Recall (%)": "73.92 +/- 0.00",
+      "F1 Score (%)": "71.36 +/- 0.00",
+      "ECE": "0.2529 +/- 0.0000",
+      "Energy Red (%)": "2.27 +/- 0.00",
+      "Latency (ms)": "0.67 +/- 0.00"
+    },
+    {
+      "Model": "Adaptive Width",
+      "Lambda": 0.02,
+      "Params": 98577,
+      "MFLOPs": "2.24",
+      "Accuracy (%)": "89.11 +/- 0.00",
+      "Recall (%)": "85.99 +/- 0.00",
+      "F1 Score (%)": "73.00 +/- 0.00",
+      "ECE": "0.1851 +/- 0.0000",
+      "Energy Red (%)": "14.14 +/- 0.00",
+      "Latency (ms)": "0.34 +/- 0.00"
+    }
+  ],
+  "raw_trial_metrics": {
+    "Base CNN (Control)": {
+      "acc": [
+        94.03057805932875
+      ],
+      "recall": [
+        89.9010662262943
+      ],
+      "f1": [
+        82.11204725695707
+      ],
+      "ece": [
+        0.012468436042494419
+      ],
+      "energy_red": [
+        0.0
+      ],
+      "latency": [
+        0.4306103560610405
+      ]
+    },
+    "Constant Width": {
+      "acc": [
+        91.07023207650606
+      ],
+      "recall": [
+        69.93974935031723
+      ],
+      "f1": [
+        66.60183691515805
+      ],
+      "ece": [
+        0.25812523901052287
+      ],
+      "energy_red": [
+        8.173106974738165
+      ],
+      "latency": [
+        0.5448208719613586
+      ]
+    },
+    "Increasing Width": {
+      "acc": [
+        89.78497898519826
+      ],
+      "recall": [
+        77.95121745503562
+      ],
+      "f1": [
+        72.06744706917935
+      ],
+      "ece": [
+        0.2444603578950816
+      ],
+      "energy_red": [
+        33.603485185453664
+      ],
+      "latency": [
+        0.314094149370014
+      ]
+    },
+    "Decreasing Width": {
+      "acc": [
+        92.05701407078028
+      ],
+      "recall": [
+        73.91751359963996
+      ],
+      "f1": [
+        71.35773829877778
+      ],
+      "ece": [
+        0.252944312730573
+      ],
+      "energy_red": [
+        2.267225520286076
+      ],
+      "latency": [
+        0.6687736993382922
+      ]
+    },
+    "Adaptive Width": {
+      "acc": [
+        89.11494182859231
+      ],
+      "recall": [
+        85.98802579626383
+      ],
+      "f1": [
+        73.00078025729859
+      ],
+      "ece": [
+        0.18513858108294828
+      ],
+      "energy_red": [
+        14.140172016893683
+      ],
+      "latency": [
+        0.3432518397366847
+      ]
+    }
+  }
+}
