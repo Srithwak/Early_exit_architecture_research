@@ -13,6 +13,7 @@ venv/
 # Data & large files
 data/
 *.zip
+*.npy
 
 # Results (regeneratable)
 results/
@@ -26,6 +27,17 @@ plots/
 plots_ecg/
 plots_mitbih/
 plots_datasets/
+
+# Logs & output files
+*.txt
+!requirements.txt
+
+# Stale development artifacts
+status.md
+research.md
+status_report.ipynb
+run_experiments.ps1
+run_tuned_ablation.py
 
 # OS
 .DS_Store
