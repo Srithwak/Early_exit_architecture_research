@@ -180,91 +180,117 @@ PREPROCESSING: Z-score normalization + FFT frequency band features
 
 ---
 
-## SLIDE 7 — Main Results: Bonn EEG (KEY SLIDE)
+## SLIDE 7 — Bonn EEG Results (KEY SLIDE)
 
-**Time: ~1 minute 15 seconds**
+**Time: ~1 minute 15 seconds** ← Spend extra time here
 
 ### Slide Content
 ```
-BONN EEG RESULTS (Seizure Detection — Binary, 1 trial)
----------------------------------------------------------
-| Model              | Accuracy | F1 Score | Energy Red. |
-|--------------------|----------|----------|-------------|
-| Baseline CNN       | 75.00%   | 42.86%   | 0%          |
-| Constant Width     | 93.33%   | 90.68%   | 29.74%      |
-| Increasing Width ⭐ | 93.33%   | 90.68%   | 42.11%      |
-| Decreasing Width   | 93.33%   | 90.68%   | 15.83%      |
-| Adaptive Width     | 75.00%   | 42.86%   | 48.18%      |
+BONN EEG RESULTS (Seizure Detection — Binary, 280 train samples)
+------------------------------------------------------------------
+| Model              | Accuracy | F1 Score | Energy Red. | ECE    | Latency |
+|--------------------|----------|----------|-------------|--------|---------|
+| Baseline CNN       | 75.00%   | 42.86%   | 0%          | 0.2449 | 2.53 ms |
+| Constant Width     | 93.33%   | 90.68%   | 29.74%      | 0.0641 | 2.57 ms |
+| Increasing Width ⭐ | 93.33%   | 90.68%   | 42.11%      | 0.1086 | 1.46 ms |
+| Decreasing Width   | 93.33%   | 90.68%   | 15.83%      | 0.0257 | 9.80 ms |
+| Adaptive Width     | 75.00%   | 42.86%   | 48.18%*     | 0.2434 | 5.39 ms |
+
+* = model collapsed to majority-class prediction
 
 KEY FINDING: Early exits MASSIVELY outperform the baseline
 on this small dataset (F1: 42.86% → 90.68%)
+Joint training acts as a powerful regularizer.
 ```
 
 ### Visual — Pareto plot: accuracy vs energy reduction
 
 ### Script
-> "On the Bonn EEG dataset, the results are striking. The baseline CNN only achieves 75% accuracy and 42.86% F1 — it mostly predicts the majority class. But all three properly-functioning early-exit architectures jump to 93.33% accuracy and 90.68% F1. The joint training with energy-aware loss acts as a powerful regularizer on this tiny dataset.
+> "On the Bonn EEG dataset, the results are striking. The baseline CNN only achieves 75% accuracy and 42.86% F1 — it mostly predicts the majority class. But all three properly-functioning early-exit architectures jump to 93.33% accuracy and 90.68% F1. The joint training with energy-aware loss acts as a powerful regularizer on this tiny 280-sample dataset.
 >
-> Among them, Increasing Width is the clear winner: same accuracy but with 42% energy savings and the lowest latency at 1.46ms. Note that Adaptive Width collapsed on this small dataset, matching the baseline's poor performance."
+> Among them, Increasing Width is the clear efficiency winner: same accuracy, 42% energy savings, and the lowest latency at 1.46ms. Decreasing Width has the best calibration (ECE = 0.026) but the worst latency. Adaptive Width collapsed on this small dataset — it needs more data to learn meaningful gating patterns."
 
 ---
 
-## SLIDE 8 — Cross-Dataset Results (KEY SLIDE)
+## SLIDE 8 — ECG & MIT-BIH Results
+
+**Time: ~1 minute 15 seconds**
+
+### Slide Content
+```
+ECG ARRHYTHMIA (5-class, 87K train samples, 1+1 epochs)
+----------------------------------------------------------
+| Model              | Accuracy | F1 Score | Energy Red. | ECE    | Latency |
+|--------------------|----------|----------|-------------|--------|---------|
+| Baseline CNN       | 93.41%   | 83.32%   | 0%          | 0.0125 | 0.43 ms |
+| Constant Width     | 88.77%   | 79.79%   | 7.81%       | 0.1796 | 0.51 ms |
+| Increasing Width ⭐ | 88.94%   | 79.54%   | 25.69%      | 0.1452 | 0.25 ms |
+| Decreasing Width   | 88.05%   | 76.51%   | 2.95%       | 0.1638 | 0.67 ms |
+| Adaptive Width     | 88.68%   | 76.66%   | 17.11%      | 0.0924 | 0.36 ms |
+
+MIT-BIH ARRHYTHMIA (5-class, 77K train samples, 1+1 epochs)
+--------------------------------------------------------------
+| Model              | Accuracy | F1 Score | Energy Red. | ECE    | Latency |
+|--------------------|----------|----------|-------------|--------|---------|
+| Baseline CNN       | 94.03%   | 82.11%   | 0%          | 0.0125 | 0.43 ms |
+| Constant Width     | 91.07%   | 66.60%   | 8.17%       | 0.2581 | 0.54 ms |
+| Increasing Width ⭐ | 89.78%   | 72.07%   | 33.60%      | 0.2445 | 0.31 ms |
+| Decreasing Width   | 92.06%   | 71.36%   | 2.27%       | 0.2529 | 0.67 ms |
+| Adaptive Width     | 89.11%   | 73.00%   | 14.14%      | 0.1851 | 0.34 ms |
+
+Note: ECG/MIT-BIH trained only 2 total epochs (vs 20 for Bonn)
+→ Exit branches are under-trained, explaining accuracy gap
+```
+
+### Script
+> "On the large-scale ECG and MIT-BIH datasets, the story reverses — the baseline CNN outperforms all early-exit models. On ECG, baseline reaches 93.41% accuracy versus ~89% for early-exit models. On MIT-BIH, the gap is even larger with the Constant Width F1 dropping by 15 percentage points.
+>
+> However, these models were trained for only 2 total epochs versus 20 for Bonn. The exit branches are severely under-trained — note the high ECE values (0.14–0.26) indicating miscalibrated confidence. Despite this, Increasing Width still achieves the highest energy savings on both datasets — 25.69% on ECG and 33.60% on MIT-BIH — with the lowest latency. This efficiency advantage is consistent regardless of training budget."
+
+---
+
+## SLIDE 9 — Cross-Dataset Comparison & Thresholding
 
 **Time: ~1 minute**
 
 ### Slide Content
 ```
-CROSS-DATASET ACCURACY COMPARISON
------------------------------------
+CROSS-DATASET ENERGY REDUCTION (%) — INCREASING WIDTH WINS EVERYWHERE
+------------------------------------------------------------------------
 | Model              | Bonn EEG | ECG     | MIT-BIH |
 |--------------------|----------|---------|---------|
-| Baseline CNN       | 75.00%   | 93.41%  | 94.03%  |
-| Constant Width     | 93.33%   | 88.77%  | 91.07%  |
-| Increasing Width ⭐ | 93.33%   | 88.94%  | 89.78%  |
-| Decreasing Width   | 93.33%   | 88.05%  | 92.06%  |
-| Adaptive Width     | 75.00%   | 88.68%  | 89.11%  |
+| Constant Width     | 29.74%   | 7.81%   | 8.17%   |
+| Increasing Width ⭐ | 42.11%   | 25.69%  | 33.60%  |
+| Decreasing Width   | 15.83%   | 2.95%   | 2.27%   |
+| Adaptive Width     | 48.18%*  | 17.11%  | 14.14%  |
 
-ENERGY REDUCTION (%)
-| Increasing Width   | 42.11%   | 25.69%  | 33.60%  |
+CROSS-DATASET CALIBRATION (ECE — lower is better)
+----------------------------------------------------
+| Model              | Bonn EEG | ECG     | MIT-BIH |
+|--------------------|----------|---------|---------|
+| Baseline CNN       | 0.2449   | 0.0125  | 0.0125  |
+| Decreasing Width   | 0.0257   | 0.1638  | 0.2529  |
+| Increasing Width   | 0.1086   | 0.1452  | 0.2445  |
 
-Note: ECG/MIT-BIH trained only 2 epochs (vs 20 for Bonn)
+EXIT STRATEGIES (Bonn EEG, Constant Width model)
+---------------------------------------------------
+| Strategy   | Accuracy | F1 Score | Energy Red. |
+|------------|----------|----------|-------------|
+| Confidence | 93.3%    | 90.7%    | 28.4%       |
+| Entropy    | 86.7%    | 79.2%    | 20.1%       |
+| Patience   | 91.7%    | 88.1%    | 3.2%        |
+
+→ Confidence thresholding wins on all metrics
 ```
 
 ### Script
-> "Across all three datasets, Increasing Width consistently achieves the highest energy reduction — 25 to 42% — with the lowest latency. On the larger ECG and MIT-BIH datasets, the baseline actually outperforms early-exit models, but those were trained for only 2 total epochs vs. 20 for Bonn. The early-exit branches need more training to converge properly. The key takeaway is that Increasing Width is the most efficient architecture regardless of dataset."
+> "Looking across all three datasets, three patterns emerge. First, Increasing Width consistently achieves the highest energy reduction — 25 to 42% — regardless of dataset. Second, calibration is a concern: on the well-trained Bonn dataset, Decreasing Width has excellent calibration at 0.026 ECE, but on ECG and MIT-BIH all early-exit models have poor calibration above 0.14 — the under-trained exit branches produce overconfident wrong predictions.
+>
+> For exit strategies, confidence-based thresholding wins on all metrics. Patience is too conservative, saving only 3.2% energy. This held across all our experiments."
 
 ---
 
-## SLIDE 9 — Dynamic Thresholding & Calibration (Results)
-
-**Time: ~45 seconds**
-
-### Slide Content
-```
-THREE EXIT STRATEGIES COMPARED (Bonn EEG)
--------------------------------------------
-| Strategy   | Accuracy | Energy Red. | F1 Score |
-|------------|----------|-------------|----------|
-| Confidence | 93.3%    | 28.4%       | 90.7%    |
-| Entropy    | 86.7%    | 20.1%       | 79.2%    |
-| Patience   | 91.7%    | 3.2%        | 88.1%    |
-
-* Confidence-based thresholding WINS on all metrics
-* Patience is too conservative (barely saves energy)
-
-CALIBRATION (ECE — lower is better)
-* Bonn: Decreasing Width best (0.026)
-* ECG/MIT-BIH: Baseline best (0.013)
-* Early exits degrade calibration on large datasets
-```
-
-### Script
-> "We compared three exit strategies. Confidence-based thresholding wins on all fronts. Patience-based is too conservative, saving only 3.2% energy. For calibration, Decreasing Width has the best ECE on Bonn, but on larger datasets the baseline's calibration is superior — early exits tend to degrade confidence estimates, which is a concern for clinical deployment."
-
----
-
-## SLIDE 10 — Pruning & Scaling (Results)
+## SLIDE 10 — Pruning, Scaling & Key Patterns
 
 **Time: ~45 seconds**
 
@@ -279,14 +305,27 @@ STRUCTURED PRUNING (Bonn EEG)
 | 25%          | 83.3%    | 43%             |
 | 50%          | 80.0%    | 70%             |
 
-MODEL SIZE SCALING
-------------------
+→ Steep accuracy cliff; early exits are the more graceful
+  efficiency mechanism
+
+MODEL SIZE SCALING (Bonn EEG)
+-------------------------------
 * Sweet spot: Small [32] to Medium [64] channels
-* XLarge [256] OVERFITS on small datasets
+* XLarge [256] OVERFITS → drops to 77% accuracy
+* Bigger ≠ better on small datasets
+
+KEY PATTERN ACROSS ALL DATASETS
+---------------------------------
+* Early exits act as REGULARIZERS on small data (Bonn)
+* On large data (ECG/MIT-BIH), training budget is critical
+  — 2 epochs is not enough for exit branches to converge
+* Increasing Width [32→64→128] is Pareto-optimal everywhere
 ```
 
 ### Script
-> "We explored structured pruning — physically removing convolutional channels — as a complementary technique. At 25% pruning, you save 43% FLOPs but lose about 10 points of accuracy. Early exits remain the more graceful efficiency mechanism. Our scaling study confirms the sweet spot is around 32-64 channels — bigger models overfit on small datasets."
+> "Structured pruning shows a steep accuracy cliff — even 10% pruning costs 12 points of accuracy. Early exits are the more graceful approach. Our model size scaling confirms a sweet spot around 32-64 channels, with the XLarge model actually overfitting on the small Bonn dataset.
+>
+> The key pattern across all three datasets is clear: Increasing Width is consistently Pareto-optimal for efficiency. And on the small Bonn dataset, early-exit training acts as a powerful regularizer — something we didn't expect going in."
 
 ---
 
