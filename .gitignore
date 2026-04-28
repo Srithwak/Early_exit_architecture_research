@@ -1,43 +1,40 @@
-# Environment & secrets
-.env
-
-# Python
+# Python artifacts
 __pycache__/
 *.pyc
+*.pyo
+*.pyd
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Environment
+.env
 venv/
 .venv/
+env/
+*.swp
 
-# IDE
+# IDEs
 .vscode/
-
-# Data & large files
-data/
-*.zip
-*.npy
-
-# Results (regeneratable)
-results/
-results_ecg/
-results_mitbih/
-results_tuned/
-papers/
-
-# Plots (regeneratable)
-plots/
-plots_ecg/
-plots_mitbih/
-plots_datasets/
-
-# Logs & output files
-*.txt
-!requirements.txt
-
-# Stale development artifacts
-status.md
-research.md
-status_report.ipynb
-run_experiments.ps1
-run_tuned_ablation.py
-
-# OS
+.idea/
 .DS_Store
+
+# Data
+data/**/*
+!data/**/
+!data/**/.gitkeep
+*.npy
+*.zip
+*.csv
+
+# Experiments & Results (Regeneratable)
+results*/*
+!results*/.gitkeep
+plots*/*
+!plots*/.gitkeep
+experiment_results.json
+
+# Presentation/Notes (Specific)
+!presentation.md
+!metrics.md
+!README.md

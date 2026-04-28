@@ -1,7 +1,3 @@
-"""
-visualize.py — Publication-quality visualizations for early-exit research.
-"""
-
 import os
 import numpy as np
 import matplotlib.pyplot as plt
@@ -13,309 +9,185 @@ COLORS = ['#2196F3', '#FF9800', '#4CAF50', '#E91E63', '#9C27B0',
           '#00BCD4', '#FF5722', '#607D8B', '#795548', '#CDDC39']
 
 
-def _save_plot(fig, plots_dir, name):
-    fig.savefig(os.path.join(plots_dir, f"{name}.png"), dpi=300, bbox_inches='tight')
-    fig.savefig(os.path.join(plots_dir, f"{name}.pdf"), bbox_inches='tight')
+def _save(fig, d, name):
+    fig.savefig(os.path.join(d, f"{name}.png"), dpi=300, bbox_inches='tight')
+    fig.savefig(os.path.join(d, f"{name}.pdf"), bbox_inches='tight')
     plt.close(fig)
-    print(f"  Saved: {name}.png/.pdf")
 
 
-def plot_accuracy_vs_energy(results_df, plots_dir):
-    """1. Pareto frontier of accuracy vs energy reduction with error bars."""
+def _sn(name):
+    return name.replace(' ', '_').replace('.', '').replace('(', '').replace(')', '')
+
+
+def plot_accuracy_vs_energy(df, d):
     fig, ax = plt.subplots(figsize=(10, 7))
-    for idx, row in results_df.iterrows():
-        acc_str = str(row.get("Accuracy (%)", "0")).replace("+/-", "±")
-        er_str = str(row.get("Energy Red (%)", "0")).replace("+/-", "±")
+    for idx, row in df.iterrows():
+        a = str(row.get("Accuracy (%)", "0")).replace("+/-", "±")
+        e = str(row.get("Energy Red (%)", "0")).replace("+/-", "±")
         try:
-            acc_mean = float(acc_str.split("±")[0].strip())
-            acc_std = float(acc_str.split("±")[1].strip()) if "±" in acc_str else 0
-            er_mean = float(er_str.split("±")[0].strip())
-            er_std = float(er_str.split("±")[1].strip()) if "±" in er_str else 0
-        except (ValueError, IndexError):
-            acc_mean, acc_std, er_mean, er_std = 0, 0, 0, 0
-        ax.errorbar(er_mean, acc_mean, xerr=er_std, yerr=acc_std,
-                     fmt='o', markersize=10, capsize=5, color=COLORS[idx % len(COLORS)],
-                     label=row.get("Model", f"Model {idx}"))
-    ax.set_xlabel("Energy Reduction (%)", fontsize=13)
-    ax.set_ylabel("Accuracy (%)", fontsize=13)
-    ax.set_title("Accuracy vs Energy Reduction Trade-off", fontsize=15, fontweight='bold')
-    ax.legend(fontsize=9, loc='best')
-    ax.grid(True, alpha=0.3)
-    _save_plot(fig, plots_dir, "accuracy_vs_energy")
+            am, astd = float(a.split("±")[0]), (float(a.split("±")[1]) if "±" in a else 0)
+            em, estd = float(e.split("±")[0]), (float(e.split("±")[1]) if "±" in e else 0)
+        except: am = astd = em = estd = 0
+        ax.errorbar(em, am, xerr=estd, yerr=astd, fmt='o', markersize=10, capsize=5,
+                     color=COLORS[idx % len(COLORS)], label=row.get("Model", f"Model {idx}"))
+    ax.set_xlabel("Energy Reduction (%)"); ax.set_ylabel("Accuracy (%)")
+    ax.set_title("Accuracy vs Energy Reduction", fontsize=15, fontweight='bold')
+    ax.legend(fontsize=9); ax.grid(True, alpha=0.3)
+    _save(fig, d, "accuracy_vs_energy")
 
 
-def plot_reliability_diagram(ece_bin_data, model_name, ece_value, plots_dir):
-    """2. Calibration / Reliability diagram."""
+def plot_reliability_diagram(bins, name, ece, d):
     fig, ax = plt.subplots(figsize=(8, 8))
-    bins_acc = [b["accuracy"] for b in ece_bin_data]
-    bins_conf = [b["confidence"] for b in ece_bin_data]
-    bins_count = [b["count"] for b in ece_bin_data]
-    bin_centers = [(b["bin_lower"] + b["bin_upper"]) / 2 for b in ece_bin_data]
-    width = 1.0 / len(ece_bin_data) * 0.8
-
-    ax.bar(bin_centers, bins_acc, width=width, alpha=0.7, color='#2196F3',
-           edgecolor='white', label='Outputs')
-    ax.plot([0, 1], [0, 1], 'k--', linewidth=2, label='Perfect Calibration')
-    ax.set_xlabel("Mean Predicted Confidence", fontsize=13)
-    ax.set_ylabel("Fraction of Positives (Accuracy)", fontsize=13)
-    ax.set_title(f"Reliability Diagram: {model_name}\nECE = {ece_value:.4f}",
-                 fontsize=14, fontweight='bold')
-    ax.legend(fontsize=11)
-    ax.set_xlim(0, 1)
-    ax.set_ylim(0, 1)
-    ax.set_aspect('equal')
-    safe_name = model_name.replace(" ", "_").replace(".", "")
-    _save_plot(fig, plots_dir, f"reliability_{safe_name}")
+    centers = [(b["bin_lower"] + b["bin_upper"]) / 2 for b in bins]
+    w = 1.0 / len(bins) * 0.8
+    ax.bar(centers, [b["accuracy"] for b in bins], width=w, alpha=0.7, color='#2196F3', edgecolor='white', label='Outputs')
+    ax.plot([0, 1], [0, 1], 'k--', lw=2, label='Perfect')
+    ax.set_xlabel("Confidence"); ax.set_ylabel("Accuracy")
+    ax.set_title(f"Reliability: {name}\nECE = {ece:.4f}", fontsize=14, fontweight='bold')
+    ax.legend(); ax.set_xlim(0, 1); ax.set_ylim(0, 1); ax.set_aspect('equal')
+    _save(fig, d, f"reliability_{_sn(name)}")
 
 
-def plot_exit_heatmap(analysis_results, model_name, plots_dir):
-    """3. Exit distribution heatmap (classes × stages)."""
-    per_class = analysis_results["per_class_exits"]
-    classes = sorted(per_class.keys())
-    num_stages = len(list(per_class.values())[0])
-
-    data = np.array([per_class[c] for c in classes], dtype=float)
-    # Normalize per class
-    row_sums = data.sum(axis=1, keepdims=True)
-    row_sums[row_sums == 0] = 1
-    data_norm = data / row_sums * 100
-
+def plot_exit_heatmap(analysis, name, d):
+    pc = analysis["per_class_exits"]; classes = sorted(pc.keys())
+    ns = len(list(pc.values())[0])
+    data = np.array([pc[c] for c in classes], dtype=float)
+    rs = data.sum(axis=1, keepdims=True); rs[rs == 0] = 1; dn = data / rs * 100
     fig, ax = plt.subplots(figsize=(8, 5))
-    im = ax.imshow(data_norm, cmap='YlOrRd', aspect='auto')
-    ax.set_xticks(range(num_stages))
-    ax.set_xticklabels([f"Stage {i}" for i in range(num_stages)])
-    ax.set_yticks(range(len(classes)))
-    ax.set_yticklabels([f"Class {c}" for c in classes])
+    ax.imshow(dn, cmap='YlOrRd', aspect='auto')
+    ax.set_xticks(range(ns)); ax.set_xticklabels([f"S{i}" for i in range(ns)])
+    ax.set_yticks(range(len(classes))); ax.set_yticklabels([f"C{c}" for c in classes])
     for i in range(len(classes)):
-        for j in range(num_stages):
-            ax.text(j, i, f"{data_norm[i,j]:.1f}%\n({int(data[i,j])})",
-                    ha='center', va='center', fontsize=10)
-    plt.colorbar(im, ax=ax, label="Exit %")
-    ax.set_title(f"Exit Distribution: {model_name}", fontsize=14, fontweight='bold')
-    safe_name = model_name.replace(" ", "_").replace(".", "")
-    _save_plot(fig, plots_dir, f"exit_heatmap_{safe_name}")
+        for j in range(ns):
+            ax.text(j, i, f"{dn[i,j]:.1f}%", ha='center', va='center', fontsize=10)
+    ax.set_title(f"Exit Distribution: {name}", fontsize=14, fontweight='bold')
+    _save(fig, d, f"exit_heatmap_{_sn(name)}")
 
 
-def plot_per_stage_accuracy(analysis_results, model_name, plots_dir):
-    """4. Per-stage accuracy breakdown."""
-    accs = analysis_results["per_stage_accuracy"]
-    counts = analysis_results["per_stage_counts"]
-    stages = [f"Stage {i}" for i in range(len(accs))]
-
-    fig, ax1 = plt.subplots(figsize=(8, 6))
-    bars = ax1.bar(stages, [a * 100 for a in accs], color=COLORS[:len(accs)],
-                   edgecolor='white', linewidth=1.5)
-    ax1.set_ylabel("Accuracy (%)", fontsize=13)
-    ax1.set_ylim(0, 105)
-    for bar, acc, count in zip(bars, accs, counts):
-        ax1.text(bar.get_x() + bar.get_width()/2, bar.get_height() + 1,
-                 f"{acc*100:.1f}%\n(n={count})", ha='center', fontsize=10)
-    ax1.set_title(f"Per-Stage Accuracy: {model_name}", fontsize=14, fontweight='bold')
-    safe_name = model_name.replace(" ", "_").replace(".", "")
-    _save_plot(fig, plots_dir, f"stage_accuracy_{safe_name}")
+def plot_per_stage_accuracy(analysis, name, d):
+    accs = analysis["per_stage_accuracy"]; counts = analysis["per_stage_counts"]
+    fig, ax = plt.subplots(figsize=(8, 6))
+    bars = ax.bar([f"S{i}" for i in range(len(accs))], [a*100 for a in accs], color=COLORS[:len(accs)])
+    ax.set_ylabel("Accuracy (%)"); ax.set_ylim(0, 105)
+    for bar, a, c in zip(bars, accs, counts):
+        ax.text(bar.get_x() + bar.get_width()/2, bar.get_height() + 1, f"{a*100:.1f}%\nn={c}", ha='center', fontsize=10)
+    ax.set_title(f"Per-Stage Accuracy: {name}", fontsize=14, fontweight='bold')
+    _save(fig, d, f"stage_accuracy_{_sn(name)}")
 
 
-def plot_confidence_distributions(exit_df, model_name, plots_dir):
-    """5. Confidence distributions at each exit (correct vs incorrect)."""
-    num_stages = exit_df["exit_stage"].nunique()
-    fig, axes = plt.subplots(1, max(num_stages, 1), figsize=(5 * num_stages, 5), squeeze=False)
-    axes = axes.flatten()
-
-    for s in range(num_stages):
-        ax = axes[s]
-        stage_df = exit_df[exit_df["exit_stage"] == s]
-        correct = stage_df[stage_df["is_correct"] == 1]["confidence"]
-        incorrect = stage_df[stage_df["is_correct"] == 0]["confidence"]
-        if len(correct) > 0:
-            ax.hist(correct, bins=20, alpha=0.6, color='#4CAF50', label='Correct', density=True)
-        if len(incorrect) > 0:
-            ax.hist(incorrect, bins=20, alpha=0.6, color='#E91E63', label='Incorrect', density=True)
-        ax.set_title(f"Stage {s} (n={len(stage_df)})", fontsize=12)
-        ax.set_xlabel("Confidence")
-        ax.legend()
-
-    fig.suptitle(f"Confidence Distributions: {model_name}", fontsize=14, fontweight='bold')
-    plt.tight_layout()
-    safe_name = model_name.replace(" ", "_").replace(".", "")
-    _save_plot(fig, plots_dir, f"confidence_dist_{safe_name}")
+def plot_confidence_distributions(exit_df, name, d):
+    ns = exit_df["exit_stage"].nunique()
+    fig, axes = plt.subplots(1, max(ns, 1), figsize=(5*ns, 5), squeeze=False); axes = axes.flatten()
+    for s in range(ns):
+        ax = axes[s]; sd = exit_df[exit_df["exit_stage"] == s]
+        c = sd[sd["is_correct"] == 1]["confidence"]; ic = sd[sd["is_correct"] == 0]["confidence"]
+        if len(c) > 0: ax.hist(c, bins=20, alpha=0.6, color='#4CAF50', label='Correct', density=True)
+        if len(ic) > 0: ax.hist(ic, bins=20, alpha=0.6, color='#E91E63', label='Incorrect', density=True)
+        ax.set_title(f"Stage {s} (n={len(sd)})"); ax.legend()
+    fig.suptitle(f"Confidence: {name}", fontsize=14, fontweight='bold'); plt.tight_layout()
+    _save(fig, d, f"confidence_dist_{_sn(name)}")
 
 
-def plot_overthinking_underthinking(analysis_results, model_name, plots_dir):
-    """6. Overthinking/underthinking summary."""
-    summary = analysis_results["summary"]
+def plot_overthinking_underthinking(analysis, name, d):
+    s = analysis["summary"]
+    ot, ut, total = s["overthinking_count"], s["underthinking_count"], s["total_samples"]
     fig, ax = plt.subplots(figsize=(8, 5))
-    categories = ['Overthinking\n(correct earlier,\nexited later)',
-                   'Underthinking\n(exited early,\nincorrect)',
-                   'Optimal\n(correct at\nexit stage)']
-    ot = summary["overthinking_count"]
-    ut = summary["underthinking_count"]
-    total = summary["total_samples"]
-    optimal = total - ot - ut
-    values = [ot, ut, optimal]
-    colors_bar = ['#FF9800', '#E91E63', '#4CAF50']
-
-    bars = ax.bar(categories, values, color=colors_bar, edgecolor='white', linewidth=2)
-    for bar, val in zip(bars, values):
-        ax.text(bar.get_x() + bar.get_width()/2, bar.get_height() + 1,
-                f"{val} ({val/total*100:.1f}%)", ha='center', fontsize=11, fontweight='bold')
-    ax.set_ylabel("Number of Samples", fontsize=13)
-    ax.set_title(f"Exit Quality: {model_name}", fontsize=14, fontweight='bold')
-    safe_name = model_name.replace(" ", "_").replace(".", "")
-    _save_plot(fig, plots_dir, f"exit_quality_{safe_name}")
+    vals = [ot, ut, total - ot - ut]
+    bars = ax.bar(['Overthink', 'Underthink', 'Optimal'], vals, color=['#FF9800', '#E91E63', '#4CAF50'])
+    for bar, v in zip(bars, vals):
+        ax.text(bar.get_x() + bar.get_width()/2, bar.get_height() + 1, f"{v} ({v/total*100:.1f}%)", ha='center', fontweight='bold')
+    ax.set_ylabel("Samples"); ax.set_title(f"Exit Quality: {name}", fontsize=14, fontweight='bold')
+    _save(fig, d, f"exit_quality_{_sn(name)}")
 
 
-def plot_hp_sensitivity(tuning_results, plots_dir):
-    """7. Hyperparameter sensitivity heatmap (lr vs energy_lambda -> F1)."""
-    if not tuning_results:
-        return
+def plot_hp_sensitivity(results, d):
+    if not results: return
     import pandas as pd
-    df = pd.DataFrame(tuning_results)
-    if "lr" not in df.columns or "energy_lambda" not in df.columns:
-        return
+    df = pd.DataFrame(results)
+    if "lr" not in df.columns or "energy_lambda" not in df.columns: return
     pivot = df.pivot_table(index="lr", columns="energy_lambda", values="f1", aggfunc="mean")
-
     fig, ax = plt.subplots(figsize=(10, 7))
     im = ax.imshow(pivot.values, cmap='viridis', aspect='auto')
-    ax.set_xticks(range(len(pivot.columns)))
-    ax.set_xticklabels([f"{v:.3f}" for v in pivot.columns], rotation=45)
-    ax.set_yticks(range(len(pivot.index)))
-    ax.set_yticklabels([f"{v:.4f}" for v in pivot.index])
-    ax.set_xlabel("Energy Lambda", fontsize=13)
-    ax.set_ylabel("Learning Rate", fontsize=13)
-    for i in range(len(pivot.index)):
-        for j in range(len(pivot.columns)):
-            val = pivot.values[i, j]
-            if not np.isnan(val):
-                ax.text(j, i, f"{val:.1f}", ha='center', va='center', fontsize=9,
-                        color='white' if val < pivot.values[~np.isnan(pivot.values)].mean() else 'black')
-    plt.colorbar(im, ax=ax, label="F1 Score (%)")
-    ax.set_title("Hyperparameter Sensitivity: LR vs Energy Lambda", fontsize=14, fontweight='bold')
-    _save_plot(fig, plots_dir, "hp_sensitivity")
+    ax.set_xticks(range(len(pivot.columns))); ax.set_xticklabels([f"{v:.3f}" for v in pivot.columns], rotation=45)
+    ax.set_yticks(range(len(pivot.index))); ax.set_yticklabels([f"{v:.4f}" for v in pivot.index])
+    ax.set_xlabel("Energy Lambda"); ax.set_ylabel("Learning Rate")
+    plt.colorbar(im, ax=ax, label="F1 (%)"); ax.set_title("HP Sensitivity", fontsize=14, fontweight='bold')
+    _save(fig, d, "hp_sensitivity")
 
 
-def plot_model_size_scaling(size_results, plots_dir):
-    """8. Accuracy and energy vs model parameter count."""
-    if not size_results:
-        return
+def plot_model_size_scaling(results, d):
+    if not results: return
     fig, ax1 = plt.subplots(figsize=(10, 6))
-    params = [r["params"] for r in size_results]
-    accs = [r["accuracy"] for r in size_results]
-    energy = [r["energy_reduction"] for r in size_results]
-    names = [r["name"] for r in size_results]
-
-    ax1.plot(params, accs, 'o-', color='#2196F3', markersize=10, linewidth=2, label='Accuracy (%)')
-    ax1.set_xlabel("Parameters", fontsize=13)
-    ax1.set_ylabel("Accuracy (%)", fontsize=13, color='#2196F3')
+    p = [r["params"] for r in results]; a = [r["accuracy"] for r in results]; e = [r["energy_reduction"] for r in results]
+    ax1.plot(p, a, 'o-', color='#2196F3', ms=10, lw=2, label='Accuracy')
+    ax1.set_xlabel("Parameters"); ax1.set_ylabel("Accuracy (%)", color='#2196F3')
     ax2 = ax1.twinx()
-    ax2.plot(params, energy, 's-', color='#FF9800', markersize=10, linewidth=2, label='Energy Red (%)')
-    ax2.set_ylabel("Energy Reduction (%)", fontsize=13, color='#FF9800')
-    for p, a, e, n in zip(params, accs, energy, names):
-        ax1.annotate(n, (p, a), textcoords="offset points", xytext=(0, 10), ha='center', fontsize=8)
+    ax2.plot(p, e, 's-', color='#FF9800', ms=10, lw=2, label='Energy Red')
+    ax2.set_ylabel("Energy Red (%)", color='#FF9800')
     ax1.set_title("Model Size Scaling", fontsize=14, fontweight='bold')
-    lines1, labels1 = ax1.get_legend_handles_labels()
-    lines2, labels2 = ax2.get_legend_handles_labels()
-    ax1.legend(lines1 + lines2, labels1 + labels2, loc='best')
-    _save_plot(fig, plots_dir, "model_size_scaling")
+    l1, lb1 = ax1.get_legend_handles_labels(); l2, lb2 = ax2.get_legend_handles_labels()
+    ax1.legend(l1 + l2, lb1 + lb2, loc='best')
+    _save(fig, d, "model_size_scaling")
 
 
-def plot_pruning_impact(pruning_results, plots_dir):
-    """9. Accuracy vs prune ratio."""
-    if not pruning_results:
-        return
+def plot_pruning_impact(results, d):
+    if not results: return
     fig, ax1 = plt.subplots(figsize=(10, 6))
-    ratios = [r["prune_ratio"] for r in pruning_results]
-    accs = [r["accuracy"] for r in pruning_results]
-    flops_red = [r["flops_reduction"] for r in pruning_results]
-
-    ax1.plot(ratios, accs, 'o-', color='#4CAF50', markersize=10, linewidth=2, label='Accuracy (%)')
-    ax1.set_xlabel("Prune Ratio", fontsize=13)
-    ax1.set_ylabel("Accuracy (%)", fontsize=13, color='#4CAF50')
+    r = [x["prune_ratio"] for x in results]; a = [x["accuracy"] for x in results]; f = [x["flops_reduction"] for x in results]
+    ax1.plot(r, a, 'o-', color='#4CAF50', ms=10, lw=2, label='Accuracy')
+    ax1.set_xlabel("Prune Ratio"); ax1.set_ylabel("Accuracy (%)", color='#4CAF50')
     ax2 = ax1.twinx()
-    ax2.plot(ratios, flops_red, 's-', color='#E91E63', markersize=10, linewidth=2, label='FLOPs Red (%)')
-    ax2.set_ylabel("FLOPs Reduction (%)", fontsize=13, color='#E91E63')
-    ax1.set_title("Impact of Structured Pruning", fontsize=14, fontweight='bold')
-    lines1, labels1 = ax1.get_legend_handles_labels()
-    lines2, labels2 = ax2.get_legend_handles_labels()
-    ax1.legend(lines1 + lines2, labels1 + labels2, loc='best')
-    _save_plot(fig, plots_dir, "pruning_impact")
+    ax2.plot(r, f, 's-', color='#E91E63', ms=10, lw=2, label='FLOPs Red')
+    ax2.set_ylabel("FLOPs Red (%)", color='#E91E63')
+    ax1.set_title("Structured Pruning Impact", fontsize=14, fontweight='bold')
+    l1, lb1 = ax1.get_legend_handles_labels(); l2, lb2 = ax2.get_legend_handles_labels()
+    ax1.legend(l1 + l2, lb1 + lb2, loc='best')
+    _save(fig, d, "pruning_impact")
 
 
-def plot_threshold_comparison(strategy_results, plots_dir):
-    """10. Side-by-side comparison of threshold strategies."""
-    if not strategy_results:
-        return
+def plot_threshold_comparison(results, d):
+    if not results: return
     fig, axes = plt.subplots(1, 3, figsize=(18, 6))
-    strategies = list(strategy_results.keys())
-    metrics = ["accuracy", "energy_reduction", "f1"]
-    titles = ["Accuracy (%)", "Energy Reduction (%)", "F1 Score (%)"]
-
-    for ax, metric, title in zip(axes, metrics, titles):
-        vals = [strategy_results[s].get(metric, 0) for s in strategies]
-        bars = ax.bar(strategies, vals, color=COLORS[:len(strategies)], edgecolor='white')
+    strats = list(results.keys())
+    for ax, m, t in zip(axes, ["accuracy", "energy_reduction", "f1"], ["Accuracy (%)", "Energy Red (%)", "F1 (%)"]):
+        vals = [results[s].get(m, 0) for s in strats]
+        bars = ax.bar(strats, vals, color=COLORS[:len(strats)])
         for bar, v in zip(bars, vals):
-            ax.text(bar.get_x() + bar.get_width()/2, bar.get_height() + 0.5,
-                    f"{v:.1f}", ha='center', fontsize=11, fontweight='bold')
-        ax.set_ylabel(title, fontsize=12)
-        ax.set_title(title, fontsize=13, fontweight='bold')
-
-    fig.suptitle("Dynamic Threshold Strategy Comparison", fontsize=15, fontweight='bold')
-    plt.tight_layout()
-    _save_plot(fig, plots_dir, "threshold_comparison")
+            ax.text(bar.get_x() + bar.get_width()/2, bar.get_height() + 0.5, f"{v:.1f}", ha='center', fontweight='bold')
+        ax.set_ylabel(t); ax.set_title(t, fontweight='bold')
+    fig.suptitle("Threshold Strategy Comparison", fontsize=15, fontweight='bold'); plt.tight_layout()
+    _save(fig, d, "threshold_comparison")
 
 
-def plot_exit_distributions_grid(all_exit_dists, all_results, plots_dir):
-    """Grid of exit distribution bar charts for all models."""
-    n = len(all_exit_dists)
-    cols = min(3, n)
-    rows = (n + cols - 1) // cols
-    fig, axes = plt.subplots(rows, cols, figsize=(5 * cols, 4 * rows))
-    if n == 1:
-        axes = np.array([axes])
+def plot_exit_distributions_grid(dists, results, d):
+    n = len(dists); cols = min(3, n); rows = (n + cols - 1) // cols
+    fig, axes = plt.subplots(rows, cols, figsize=(5*cols, 4*rows))
+    if n == 1: axes = np.array([axes])
     axes = axes.flatten()
-
-    for i, (name, exits) in enumerate(all_exit_dists.items()):
-        stages = [f"Stage {j}" for j in range(len(exits))]
-        axes[i].bar(stages, exits, color=COLORS[:len(exits)], edgecolor='white')
-        axes[i].set_title(name, fontsize=11, fontweight='bold')
-        axes[i].set_ylabel("Samples")
-
-    for j in range(i + 1, len(axes)):
-        fig.delaxes(axes[j])
-
+    for i, (name, exits) in enumerate(dists.items()):
+        axes[i].bar([f"S{j}" for j in range(len(exits))], exits, color=COLORS[:len(exits)])
+        axes[i].set_title(name, fontweight='bold'); axes[i].set_ylabel("Samples")
+    for j in range(i + 1, len(axes)): fig.delaxes(axes[j])
     plt.tight_layout()
-    _save_plot(fig, plots_dir, "exit_distributions_grid")
+    _save(fig, d, "exit_distributions_grid")
 
 
-def generate_all_plots(results_data, plots_dir):
-    """Master function to generate all available plots from collected data."""
+def generate_all_plots(data, plots_dir):
     os.makedirs(plots_dir, exist_ok=True)
-    print(f"\n{'='*50}\nGenerating Visualizations\n{'='*50}")
+    print(f"\nGenerating plots -> {plots_dir}/")
 
-    if "results_df" in results_data:
-        plot_accuracy_vs_energy(results_data["results_df"], plots_dir)
-
-    if "exit_distributions" in results_data:
-        plot_exit_distributions_grid(results_data["exit_distributions"],
-                                     results_data.get("results_list", []), plots_dir)
-
-    for model_name, data in results_data.get("per_model", {}).items():
-        if "ece_bin_data" in data:
-            plot_reliability_diagram(data["ece_bin_data"], model_name,
-                                     data.get("ece", 0), plots_dir)
-        if "analysis" in data:
-            plot_exit_heatmap(data["analysis"], model_name, plots_dir)
-            plot_per_stage_accuracy(data["analysis"], model_name, plots_dir)
-            plot_overthinking_underthinking(data["analysis"], model_name, plots_dir)
-        if "exit_df" in data:
-            plot_confidence_distributions(data["exit_df"], model_name, plots_dir)
-
-    if "tuning_results" in results_data:
-        plot_hp_sensitivity(results_data["tuning_results"], plots_dir)
-    if "size_results" in results_data:
-        plot_model_size_scaling(results_data["size_results"], plots_dir)
-    if "pruning_results" in results_data:
-        plot_pruning_impact(results_data["pruning_results"], plots_dir)
-    if "strategy_results" in results_data:
-        plot_threshold_comparison(results_data["strategy_results"], plots_dir)
-
-    print(f"All plots saved to {plots_dir}/")
+    if "results_df" in data: plot_accuracy_vs_energy(data["results_df"], plots_dir)
+    if "exit_distributions" in data:
+        plot_exit_distributions_grid(data["exit_distributions"], data.get("results_list", []), plots_dir)
+    for name, md in data.get("per_model", {}).items():
+        if "ece_bin_data" in md: plot_reliability_diagram(md["ece_bin_data"], name, md.get("ece", 0), plots_dir)
+        if "analysis" in md:
+            plot_exit_heatmap(md["analysis"], name, plots_dir)
+            plot_per_stage_accuracy(md["analysis"], name, plots_dir)
+            plot_overthinking_underthinking(md["analysis"], name, plots_dir)
+        if "exit_df" in md: plot_confidence_distributions(md["exit_df"], name, plots_dir)
+    if "tuning_results" in data: plot_hp_sensitivity(data["tuning_results"], plots_dir)
+    if "size_results" in data: plot_model_size_scaling(data["size_results"], plots_dir)
+    if "pruning_results" in data: plot_pruning_impact(data["pruning_results"], plots_dir)
+    if "strategy_results" in data: plot_threshold_comparison(data["strategy_results"], plots_dir)
+    print("Done.")
