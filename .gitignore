@@ -26,6 +26,7 @@ data/**/*
 *.npy
 *.zip
 *.csv
+bonn_raw/
 
 # Experiments & Results (Regeneratable)
 results*/*
