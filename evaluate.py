@@ -53,7 +53,7 @@ def evaluate_model(model, test_dl, thresholds, device, is_baseline=False):
     energy_consumed = 0.0
     all_targets, all_preds = [], []
 
-    with torch.no_grad():
+    with torch.inference_mode():
         for x, y in test_dl:
             x, y = x.to(device), y.to(device)
             outputs = model(x)
@@ -135,7 +135,7 @@ def evaluate_model_advanced(model, test_dl, thresholds, device, is_baseline=Fals
     all_targets, all_preds, all_confs = [], [], []
     per_sample_data = []
 
-    with torch.no_grad():
+    with torch.inference_mode():
         for x, y in test_dl:
             x, y = x.to(device), y.to(device)
 

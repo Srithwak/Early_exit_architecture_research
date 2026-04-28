@@ -20,7 +20,7 @@ class Config:
     plots_dir: str = "./plots_ecg"
     results_dir: str = "./results_ecg"
     batch_size: int = 128
-    seq_len: int = 187
+    seq_len: int = 140
     in_channels: int = 6
     num_classes: int = 5
     num_trials: int = 1
@@ -55,8 +55,9 @@ SIZE_CONFIGS = {
 class Pipeline:
     def __init__(self, cfg):
         self.cfg = cfg
-        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-        print(f"[ECG] Device: {self.device}")
+        self.device = torch.device("cpu")
+        torch.set_num_threads(max(1, os.cpu_count() or 1))
+        print(f"[ECG] Device: {self.device} ({torch.get_num_threads()} threads)")
         os.makedirs(cfg.plots_dir, exist_ok=True)
         os.makedirs(cfg.results_dir, exist_ok=True)
 

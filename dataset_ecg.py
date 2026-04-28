@@ -12,7 +12,7 @@ def ensure_ecg_data_exists(data_path):
         if not os.path.exists(x_path):
             print(f"Creating dummy ECG data for {split}...")
             n = 500 if split == "train" else 100
-            np.save(x_path, np.random.randn(n, 1, 187).astype(np.float32))
+            np.save(x_path, np.random.randn(n, 1, 140).astype(np.float32))
             np.save(y_path, np.random.randint(0, 5, size=(n,)))
 
 
@@ -69,8 +69,8 @@ def get_ecg_dataloaders(data_dir, batch_size=64, use_freq_bands=True):
     class_weights = len(labels) / (len(class_counts) * class_counts)
     class_weights = torch.tensor(class_weights, dtype=torch.float32)
 
-    train_dl = DataLoader(train_ds, batch_size=batch_size, shuffle=True)
-    val_dl = DataLoader(val_ds, batch_size=batch_size, shuffle=False)
-    test_dl = DataLoader(test_ds, batch_size=batch_size, shuffle=False)
+    train_dl = DataLoader(train_ds, batch_size=batch_size, shuffle=True, num_workers=0, pin_memory=False)
+    val_dl = DataLoader(val_ds, batch_size=batch_size, shuffle=False, num_workers=0, pin_memory=False)
+    test_dl = DataLoader(test_ds, batch_size=batch_size, shuffle=False, num_workers=0, pin_memory=False)
 
     return train_dl, val_dl, test_dl, class_weights

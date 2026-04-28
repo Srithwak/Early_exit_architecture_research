@@ -55,8 +55,9 @@ SIZE_CONFIGS = {
 class Pipeline:
     def __init__(self, cfg):
         self.cfg = cfg
-        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-        print(f"[MIT-BIH] Device: {self.device}")
+        self.device = torch.device("cpu")
+        torch.set_num_threads(max(1, os.cpu_count() or 1))
+        print(f"[MIT-BIH] Device: {self.device} ({torch.get_num_threads()} threads)")
         os.makedirs(cfg.plots_dir, exist_ok=True)
         os.makedirs(cfg.results_dir, exist_ok=True)
 

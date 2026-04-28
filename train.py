@@ -1,3 +1,4 @@
+import os
 import torch
 import torch.optim as optim
 import numpy as np
@@ -10,8 +11,10 @@ def set_seed(seed):
     torch.manual_seed(seed)
     if torch.cuda.is_available():
         torch.cuda.manual_seed_all(seed)
-    torch.backends.cudnn.deterministic = True
-    torch.backends.cudnn.benchmark = False
+        torch.backends.cudnn.deterministic = True
+        torch.backends.cudnn.benchmark = False
+    else:
+        torch.set_num_threads(max(1, os.cpu_count() or 1))
 
 
 def train_classifiers_only(model, dataloader, epochs, optimizer, criterion_fn, device,
@@ -82,7 +85,7 @@ def calibrate_thresholds(model, val_loader, device, strategy="confidence",
     stage_entropies = {i: [] for i in range(model.num_stages)}
     stage_predictions = {i: [] for i in range(model.num_stages)}
 
-    with torch.no_grad():
+    with torch.inference_mode():
         for x, y in val_loader:
             x, y = x.to(device), y.to(device)
             outputs = model(x)

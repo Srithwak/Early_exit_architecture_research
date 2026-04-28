@@ -10,7 +10,7 @@ def collect_exit_statistics(model, dataloader, threshold_info, device, is_baseli
     records = []
     sample_id = 0
 
-    with torch.no_grad():
+    with torch.inference_mode():
         for x, y in dataloader:
             x, y = x.to(device), y.to(device)
             outputs = model(x)
@@ -146,7 +146,7 @@ def compute_difficulty_scores(model, dataloader, device):
     records = []
     sample_id = 0
 
-    with torch.no_grad():
+    with torch.inference_mode():
         for x, y in dataloader:
             x, y = x.to(device), y.to(device)
             outputs = model(x)

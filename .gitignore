@@ -35,6 +35,5 @@ plots*/*
 experiment_results.json
 
 # Presentation/Notes (Specific)
-!presentation.md
 !metrics.md
 !README.md

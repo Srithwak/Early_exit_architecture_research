@@ -10,8 +10,7 @@ COLORS = ['#2196F3', '#FF9800', '#4CAF50', '#E91E63', '#9C27B0',
 
 
 def _save(fig, d, name):
-    fig.savefig(os.path.join(d, f"{name}.png"), dpi=300, bbox_inches='tight')
-    fig.savefig(os.path.join(d, f"{name}.pdf"), bbox_inches='tight')
+    fig.savefig(os.path.join(d, f"{name}.png"), dpi=200, bbox_inches='tight')
     plt.close(fig)
 
 
@@ -20,6 +19,7 @@ def _sn(name):
 
 
 def plot_accuracy_vs_energy(df, d):
+    """Core finding: accuracy vs energy tradeoff across architectures."""
     fig, ax = plt.subplots(figsize=(10, 7))
     for idx, row in df.iterrows():
         a = str(row.get("Accuracy (%)", "0")).replace("+/-", "±")
@@ -36,19 +36,73 @@ def plot_accuracy_vs_energy(df, d):
     _save(fig, d, "accuracy_vs_energy")
 
 
-def plot_reliability_diagram(bins, name, ece, d):
-    fig, ax = plt.subplots(figsize=(8, 8))
-    centers = [(b["bin_lower"] + b["bin_upper"]) / 2 for b in bins]
-    w = 1.0 / len(bins) * 0.8
-    ax.bar(centers, [b["accuracy"] for b in bins], width=w, alpha=0.7, color='#2196F3', edgecolor='white', label='Outputs')
-    ax.plot([0, 1], [0, 1], 'k--', lw=2, label='Perfect')
-    ax.set_xlabel("Confidence"); ax.set_ylabel("Accuracy")
-    ax.set_title(f"Reliability: {name}\nECE = {ece:.4f}", fontsize=14, fontweight='bold')
-    ax.legend(); ax.set_xlim(0, 1); ax.set_ylim(0, 1); ax.set_aspect('equal')
-    _save(fig, d, f"reliability_{_sn(name)}")
+def plot_combined_reliability(per_model_data, d):
+    """Single combined reliability diagram for all models."""
+    models_with_bins = {n: md for n, md in per_model_data.items()
+                        if md.get("ece_bin_data")}
+    if not models_with_bins:
+        return
+
+    n = len(models_with_bins)
+    cols = min(3, n)
+    rows = (n + cols - 1) // cols
+    fig, axes = plt.subplots(rows, cols, figsize=(5 * cols, 5 * rows), squeeze=False)
+    axes = axes.flatten()
+
+    for i, (name, md) in enumerate(models_with_bins.items()):
+        ax = axes[i]
+        bins = md["ece_bin_data"]
+        ece = md.get("ece", 0)
+        centers = [(b["bin_lower"] + b["bin_upper"]) / 2 for b in bins]
+        w = 1.0 / len(bins) * 0.8
+        ax.bar(centers, [b["accuracy"] for b in bins], width=w, alpha=0.7,
+               color=COLORS[i % len(COLORS)], edgecolor='white')
+        ax.plot([0, 1], [0, 1], 'k--', lw=2)
+        ax.set_title(f"{name}\nECE={ece:.4f}", fontsize=11, fontweight='bold')
+        ax.set_xlim(0, 1); ax.set_ylim(0, 1); ax.set_aspect('equal')
+        ax.set_xlabel("Confidence"); ax.set_ylabel("Accuracy")
+
+    for j in range(i + 1, len(axes)):
+        fig.delaxes(axes[j])
+
+    fig.suptitle("Calibration Reliability Diagrams", fontsize=14, fontweight='bold')
+    plt.tight_layout()
+    _save(fig, d, "combined_reliability")
+
+
+def plot_combined_exit_quality(per_model_data, d):
+    """Single combined overthink/underthink chart for all models."""
+    models_with_analysis = {n: md for n, md in per_model_data.items()
+                            if md.get("analysis") and md["analysis"].get("summary")}
+    if not models_with_analysis:
+        return
+
+    names = list(models_with_analysis.keys())
+    ot_rates = [models_with_analysis[n]["analysis"]["summary"]["overthinking_rate"] * 100 for n in names]
+    ut_rates = [models_with_analysis[n]["analysis"]["summary"]["underthinking_rate"] * 100 for n in names]
+
+    x = np.arange(len(names))
+    w = 0.35
+    fig, ax = plt.subplots(figsize=(10, 6))
+    bars1 = ax.bar(x - w/2, ot_rates, w, label='Overthinking', color='#FF9800', alpha=0.85)
+    bars2 = ax.bar(x + w/2, ut_rates, w, label='Underthinking', color='#E91E63', alpha=0.85)
+
+    for bar, v in zip(bars1, ot_rates):
+        ax.text(bar.get_x() + bar.get_width()/2, bar.get_height() + 0.5,
+                f"{v:.1f}%", ha='center', fontsize=9, fontweight='bold')
+    for bar, v in zip(bars2, ut_rates):
+        ax.text(bar.get_x() + bar.get_width()/2, bar.get_height() + 0.5,
+                f"{v:.1f}%", ha='center', fontsize=9, fontweight='bold')
+
+    ax.set_xticks(x); ax.set_xticklabels(names, rotation=20, ha='right', fontsize=9)
+    ax.set_ylabel("Rate (%)"); ax.legend()
+    ax.set_title("Exit Quality: Overthinking vs Underthinking", fontsize=14, fontweight='bold')
+    plt.tight_layout()
+    _save(fig, d, "combined_exit_quality")
 
 
 def plot_exit_heatmap(analysis, name, d):
+    """Class-level exit distribution heatmap for a single model."""
     pc = analysis["per_class_exits"]; classes = sorted(pc.keys())
     ns = len(list(pc.values())[0])
     data = np.array([pc[c] for c in classes], dtype=float)
@@ -62,57 +116,6 @@ def plot_exit_heatmap(analysis, name, d):
             ax.text(j, i, f"{dn[i,j]:.1f}%", ha='center', va='center', fontsize=10)
     ax.set_title(f"Exit Distribution: {name}", fontsize=14, fontweight='bold')
     _save(fig, d, f"exit_heatmap_{_sn(name)}")
-
-
-def plot_per_stage_accuracy(analysis, name, d):
-    accs = analysis["per_stage_accuracy"]; counts = analysis["per_stage_counts"]
-    fig, ax = plt.subplots(figsize=(8, 6))
-    bars = ax.bar([f"S{i}" for i in range(len(accs))], [a*100 for a in accs], color=COLORS[:len(accs)])
-    ax.set_ylabel("Accuracy (%)"); ax.set_ylim(0, 105)
-    for bar, a, c in zip(bars, accs, counts):
-        ax.text(bar.get_x() + bar.get_width()/2, bar.get_height() + 1, f"{a*100:.1f}%\nn={c}", ha='center', fontsize=10)
-    ax.set_title(f"Per-Stage Accuracy: {name}", fontsize=14, fontweight='bold')
-    _save(fig, d, f"stage_accuracy_{_sn(name)}")
-
-
-def plot_confidence_distributions(exit_df, name, d):
-    ns = exit_df["exit_stage"].nunique()
-    fig, axes = plt.subplots(1, max(ns, 1), figsize=(5*ns, 5), squeeze=False); axes = axes.flatten()
-    for s in range(ns):
-        ax = axes[s]; sd = exit_df[exit_df["exit_stage"] == s]
-        c = sd[sd["is_correct"] == 1]["confidence"]; ic = sd[sd["is_correct"] == 0]["confidence"]
-        if len(c) > 0: ax.hist(c, bins=20, alpha=0.6, color='#4CAF50', label='Correct', density=True)
-        if len(ic) > 0: ax.hist(ic, bins=20, alpha=0.6, color='#E91E63', label='Incorrect', density=True)
-        ax.set_title(f"Stage {s} (n={len(sd)})"); ax.legend()
-    fig.suptitle(f"Confidence: {name}", fontsize=14, fontweight='bold'); plt.tight_layout()
-    _save(fig, d, f"confidence_dist_{_sn(name)}")
-
-
-def plot_overthinking_underthinking(analysis, name, d):
-    s = analysis["summary"]
-    ot, ut, total = s["overthinking_count"], s["underthinking_count"], s["total_samples"]
-    fig, ax = plt.subplots(figsize=(8, 5))
-    vals = [ot, ut, total - ot - ut]
-    bars = ax.bar(['Overthink', 'Underthink', 'Optimal'], vals, color=['#FF9800', '#E91E63', '#4CAF50'])
-    for bar, v in zip(bars, vals):
-        ax.text(bar.get_x() + bar.get_width()/2, bar.get_height() + 1, f"{v} ({v/total*100:.1f}%)", ha='center', fontweight='bold')
-    ax.set_ylabel("Samples"); ax.set_title(f"Exit Quality: {name}", fontsize=14, fontweight='bold')
-    _save(fig, d, f"exit_quality_{_sn(name)}")
-
-
-def plot_hp_sensitivity(results, d):
-    if not results: return
-    import pandas as pd
-    df = pd.DataFrame(results)
-    if "lr" not in df.columns or "energy_lambda" not in df.columns: return
-    pivot = df.pivot_table(index="lr", columns="energy_lambda", values="f1", aggfunc="mean")
-    fig, ax = plt.subplots(figsize=(10, 7))
-    im = ax.imshow(pivot.values, cmap='viridis', aspect='auto')
-    ax.set_xticks(range(len(pivot.columns))); ax.set_xticklabels([f"{v:.3f}" for v in pivot.columns], rotation=45)
-    ax.set_yticks(range(len(pivot.index))); ax.set_yticklabels([f"{v:.4f}" for v in pivot.index])
-    ax.set_xlabel("Energy Lambda"); ax.set_ylabel("Learning Rate")
-    plt.colorbar(im, ax=ax, label="F1 (%)"); ax.set_title("HP Sensitivity", fontsize=14, fontweight='bold')
-    _save(fig, d, "hp_sensitivity")
 
 
 def plot_model_size_scaling(results, d):
@@ -176,18 +179,30 @@ def generate_all_plots(data, plots_dir):
     os.makedirs(plots_dir, exist_ok=True)
     print(f"\nGenerating plots -> {plots_dir}/")
 
-    if "results_df" in data: plot_accuracy_vs_energy(data["results_df"], plots_dir)
+    # Aggregate comparison plots
+    if "results_df" in data:
+        plot_accuracy_vs_energy(data["results_df"], plots_dir)
     if "exit_distributions" in data:
         plot_exit_distributions_grid(data["exit_distributions"], data.get("results_list", []), plots_dir)
-    for name, md in data.get("per_model", {}).items():
-        if "ece_bin_data" in md: plot_reliability_diagram(md["ece_bin_data"], name, md.get("ece", 0), plots_dir)
-        if "analysis" in md:
+
+    # Combined per-model plots (one chart each instead of 5 separate ones)
+    per_model = data.get("per_model", {})
+    if per_model:
+        plot_combined_reliability(per_model, plots_dir)
+        plot_combined_exit_quality(per_model, plots_dir)
+
+    # Exit heatmaps for the two most informative models only
+    heatmap_targets = ["Constant Width", "Decreasing Width"]
+    for name, md in per_model.items():
+        if name in heatmap_targets and md.get("analysis"):
             plot_exit_heatmap(md["analysis"], name, plots_dir)
-            plot_per_stage_accuracy(md["analysis"], name, plots_dir)
-            plot_overthinking_underthinking(md["analysis"], name, plots_dir)
-        if "exit_df" in md: plot_confidence_distributions(md["exit_df"], name, plots_dir)
-    if "tuning_results" in data: plot_hp_sensitivity(data["tuning_results"], plots_dir)
-    if "size_results" in data: plot_model_size_scaling(data["size_results"], plots_dir)
-    if "pruning_results" in data: plot_pruning_impact(data["pruning_results"], plots_dir)
-    if "strategy_results" in data: plot_threshold_comparison(data["strategy_results"], plots_dir)
+
+    # Experiment-specific plots
+    if "size_results" in data:
+        plot_model_size_scaling(data["size_results"], plots_dir)
+    if "pruning_results" in data:
+        plot_pruning_impact(data["pruning_results"], plots_dir)
+    if "strategy_results" in data:
+        plot_threshold_comparison(data["strategy_results"], plots_dir)
+
     print("Done.")
