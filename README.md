@@ -75,18 +75,3 @@ requirements.txt     Dependencies
 | MIT-BIH | ~96K | 187 | 5 | ECG Classification |
 
 All use 6-channel input (1 raw signal + 5 FFT frequency bands).
-
-## Colab
-
-| Notebook | Purpose |
-|---|---|
-| [Preprocessing](https://colab.research.google.com/drive/1cZWTCWrdIi9rCaKxJfOZ2dzz9EKVXI86?usp=sharing) | Data loading, normalization |
-| [Implementation](https://colab.research.google.com/drive/1lwuYQafT6nnBWmTOMrky1WJo3uo7_UbN?usp=sharing) | Training, evaluation, plots |
-
-Dataset: [Google Drive](https://drive.google.com/drive/folders/132mm7W9rXuarB2wd_cMy4n9-qeTmIJFX?usp=sharing)
-
-## References
-
-1. Goldberger et al. (2000). PhysioBank, PhysioToolkit, and PhysioNet. *Circulation*, 101(23).
-2. Bonn EEG Dataset. University of Bonn, Dept. of Epileptology.
-3. Moody & Mark (2001). The impact of the MIT-BIH Arrhythmia Database. *IEEE EMB Magazine*, 20(3).
